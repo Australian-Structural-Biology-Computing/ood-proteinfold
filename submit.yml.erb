@@ -1,0 +1,10 @@
+batch_connect:
+    template: "basic"
+    queue_name: "submission"
+    script_file: "/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh"
+
+script:
+    native:
+        - "-l host=k095,ngpus=1,ncpus=6,mem=40gb"
+    walltime: 43200
+    

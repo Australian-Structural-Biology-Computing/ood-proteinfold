@@ -1,0 +1,37 @@
+form:
+    - samplesheet
+    - af_method 
+    - prot_mode 
+    - email
+
+cluster: "katana"
+
+attributes:
+    samplesheet:
+        widget: "text_field"
+        pattern: "*.csv^"
+        help: |
+            Paste single amino acid sequence <b>or</b>, path to your Samplesheet CSV
+
+            e.g.; /srv/scratch/z3545907/Experiment/samplesheet.csv<br>e.g.; MPGAFSQNSSKRRAVLPRSHRVAGRGPAEAGCLPGAPAGS
+    email:
+        widget: "text_field"
+    prot_mode:
+        widget: "select"
+        label: "Mode"
+        options:
+            - ["Multimer", "multimer"]
+            - ["Monomer", "monomoer"]
+    af_method:
+        widget: "select"
+        label: "Method"
+        help: |
+            Alphafold 2 - High Accuracy, Slower
+
+            ColabFold - Medium Accuracy, Faster
+
+            ESMFold - Medium/Low Accuracy, Fastest, No Evolutionary Sequence Calculation
+        options:
+            - ["Alphafold 2", "af2", data-hide-mode: false]
+            - ["ColabFold", "cf", data-hide-mode: true]
+            - ["ESMFold", "esmf", data-hide-mode: false]

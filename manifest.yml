@@ -1,0 +1,6 @@
+name: Proteinfold
+category: Interactive Apps
+subcategory: Biology
+role: batch_connect
+description: |
+        Computationally predict protein folds
