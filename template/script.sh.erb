@@ -5,6 +5,7 @@ set -e
 
 export PATH="/srv/scratch/sbf-pipelines/proteinfold/bin/:${PATH}"
 
+module purge
 module load java/11 nextflow/23.10.1
 
 # Check if the input is an amino acid sequence or a path
