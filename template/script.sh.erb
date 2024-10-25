@@ -4,6 +4,21 @@ set -x pipefail
 set -e
 
 export PATH="/srv/scratch/sbf-pipelines/proteinfold/bin/:${PATH}"
+export NFX_SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/singularity"
+
+export PROTEINFOLD_VERSION="1.1.1"
+
+function update_local_version() {
+	rm -rf "${HOME}/.proteinfold"	
+	cp -r /srv/scratch/sbf-pipelines/proteinfold/pipeline "${HOME}"
+	mv "${HOME}/pipeline" "${HOME}/.proteinfold"
+}
+
+function pull_cluster_version() {
+	cp -r /srv/scratch/sbf-pipelines/proteinfold/pipeline/* .
+}
+
+pull_cluster_version
 
 module purge
 module load java/11 nextflow/23.10.1
@@ -12,7 +27,8 @@ module load java/11 nextflow/23.10.1
 user_input="<%= context.samplesheet %>"
 echo "${user_input}" >> $HOME/debug.txt
 
-OUT_DIR="/srv/scratch/${USER}/proteinfold/$(date -R)-<%= context.prot_mode %>"
+OUT_DIR=$(echo "<%= context.run_name %>" | sed "s/[ \,\<\>\/\?\\\'\:]/\_/g")
+OUT_DIR="/srv/scratch/${USER}/proteinfold/${OUT_DIR}"
 mkdir -p "${OUT_DIR}"
 
 MODE=""
@@ -47,11 +63,11 @@ ARGS=""
 
 [[ "<%= context.af_method %>" == "af2" ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db /mnt/af2 --alphafold2_mode split_msa_prediction --full_dbs true --alphafold2_model_preset <%= context.prot_mode %> --use_gpu true"
 [[ "<%= context.af_method %>" == "cf" ]] && PROT_MODE="colabfold"
-[[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold"
-
-cd /srv/scratch/sbf-pipelines/proteinfold/pipeline
+[[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db /mnt/af2/esmfold_weights"
 
 export SINGULARITY_CACHE_DIR="/srv/scratch/sbf-pipelines/proteinfold/singualrity"
+export APPTAINER_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
+export NXF_SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
 
 module load cuda/12.2.1
 

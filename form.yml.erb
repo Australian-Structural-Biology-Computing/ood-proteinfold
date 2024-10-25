@@ -1,5 +1,6 @@
 form:
     - samplesheet
+    - run_name
     - af_method 
     - prot_mode 
     - email
@@ -11,9 +12,11 @@ attributes:
         widget: "text_field"
         pattern: "*.csv^"
         help: |
-            Paste single amino acid sequence <b>or</b>, path to your Samplesheet CSV
-
-            e.g.; /srv/scratch/z3545907/Experiment/samplesheet.csv<br>e.g.; MPGAFSQNSSKRRAVLPRSHRVAGRGPAEAGCLPGAPAGS
+            Acceptable inputs
+            <ul>
+                <li><b>Directory containing Fasta files</b> /srv/scratch/z3545907/Experiment</li>
+                <li><b>Amino acid sequence</b> MPGAFSQNSSKRRAVLPRSHR</li>
+            </ul>
     email:
         widget: "text_field"
     prot_mode:
@@ -21,17 +24,20 @@ attributes:
         label: "Mode"
         options:
             - ["Multimer", "multimer"]
-            - ["Monomer", "monomoer"]
+            - ["Monomer", "monomer"]
     af_method:
         widget: "select"
         label: "Method"
         help: |
-            Alphafold 2 - High Accuracy, Slower
-
-            ColabFold - Medium Accuracy, Faster
-
-            ESMFold - Medium/Low Accuracy, Fastest, No Evolutionary Sequence Calculation
+            <ul>
+                <li><b>AlphaFold 2.3</b> High Accurace, Slower</li>
+                <li><b>ColabFold</b> Medium Accurace, Faster</li>
+                <li><b>ESMFold</b> Medium/Low Accurace, Fastest, No Evolutionary Sequence Calculations</li>
+            </ul>
         options:
             - ["Alphafold 2", "af2", data-hide-mode: false]
             - ["ColabFold", "cf", data-hide-mode: true]
             - ["ESMFold", "esmf", data-hide-mode: false]
+    run_name:
+        widget: "text_field"
+        label: "Run Name"
