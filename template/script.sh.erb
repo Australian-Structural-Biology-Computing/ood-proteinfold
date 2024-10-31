@@ -65,8 +65,6 @@ ARGS=""
 [[ "<%= context.af_method %>" == "cf" ]] && PROT_MODE="colabfold" && ARGS="--colbfold_db /mnt/af2"
 [[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db /mnt/af2/esmfold_weights"
 
-cd /srv/scratch/sbf-pipelines/proteinfold/pipeline
-
 export SINGULARITY_CACHE_DIR="/srv/scratch/sbf-pipelines/proteinfold/singualrity"
 export APPTAINER_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
 export NXF_SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
