@@ -4,7 +4,10 @@ set -x pipefail
 set -e
 
 export PATH="/srv/scratch/sbf-pipelines/proteinfold/bin/:${PATH}"
-export NFX_SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/singularity"
+export APPTAINER_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
+export SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
+export NXF_APPTAINER_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
+export NXF_SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
 
 export PROTEINFOLD_VERSION="1.1.1"
 
@@ -64,10 +67,7 @@ ARGS=""
 [[ "<%= context.af_method %>" == "af2" ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db /mnt/af2 --alphafold2_mode split_msa_prediction --full_dbs true --alphafold2_model_preset <%= context.prot_mode %> --use_gpu true"
 [[ "<%= context.af_method %>" == "cf" ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db /mnt/af2"
 [[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db /mnt/af2/esmfold_weights"
-
-export SINGULARITY_CACHE_DIR="/srv/scratch/sbf-pipelines/proteinfold/singualrity"
-export APPTAINER_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
-export NXF_SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
+[[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db --use_gpu"
 
 module load cuda/12.2.1
 
