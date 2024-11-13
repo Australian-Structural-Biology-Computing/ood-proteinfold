@@ -76,7 +76,10 @@ nextflow run main.nf \
 	--input "${SAMPLESHEET}" \
 	--outdir "${OUT_DIR}" \
 	--mode "${PROT_MODE}" \
+    --use_gpu \
+    --skip_multiqc \
+    --skip_visualisation \
 	${ARGS} \
-	-profile apptainer,katana,debug
+	-profile apptainer,katana
 
 exit 0

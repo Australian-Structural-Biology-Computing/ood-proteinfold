@@ -2,6 +2,7 @@ name: Proteinfold
 category: Interactive Apps
 subcategory: Biology
 role: batch_connect
+icon: "SBF_logo.jpg"
 description: |
-        <img src="https://raw.githubusercontent.com/jscgh/kod-proteinfold/refs/heads/add-helixfold3/SBF_logo.jpg" style="max-width: 200px"/><br>
+        <img src="https://raw.githubusercontent.com/jscgh/kod-proteinfold/master/SBF_logo.jpg" style="max-width: 200px"/><br>
         <i>Computationally predict protein structures</i>
