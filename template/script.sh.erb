@@ -3,7 +3,7 @@
 set -x pipefail
 set -e
 
-export PATH="/srv/scratch/sbf-pipelines/proteinfold/bin/:${PATH}"
+export PATH="/srv/scratch/z5378336/dev/kod/bin/:${PATH}"
 export APPTAINER_CACHEDIR="/srv/scratch/sbf/jsc/apptainer_cache"
 export SINGULARITY_CACHEDIR="/srv/scratch/sbf/jsc/apptainer_cache"
 export NXF_APPTAINER_CACHEDIR="/srv/scratch/sbf/jsc/apptainer_cache"
@@ -13,12 +13,12 @@ export PROTEINFOLD_VERSION="1.1.1"
 
 function update_local_version() {
 	rm -rf "${HOME}/.proteinfold"	
-	cp -r /srv/scratch/sbf/proteinfold "${HOME}"
+	cp -r /srv/scratch/z5378336/proteinfold "${HOME}"
 	mv "${HOME}/pipeline" "${HOME}/.proteinfold"
 }
 
 function pull_cluster_version() {
-	cp -r /srv/scratch/sbf/proteinfold/* .
+	cp -r /srv/scratch/z5378336/proteinfold/* .
 }
 
 pull_cluster_version
@@ -31,7 +31,7 @@ user_input="<%= context.samplesheet %>"
 echo "${user_input}" >> $HOME/debug.txt
 
 OUT_DIR=$(echo "<%= context.run_name %>" | sed "s/[ \,\<\>\/\?\\\'\:]/\_/g")
-OUT_DIR="/srv/scratch/${USER}/proteinfold/${OUT_DIR}"
+OUT_DIR="/srv/scratch/${USER}/proteinfold_output/${OUT_DIR}"
 mkdir -p "${OUT_DIR}"
 
 MODE=""
@@ -67,7 +67,8 @@ ARGS=""
 [[ "<%= context.af_method %>" == "af2" ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db /mnt/af2 --alphafold2_mode split_msa_prediction --full_dbs true --alphafold2_model_preset <%= context.prot_mode %> --use_gpu true"
 [[ "<%= context.af_method %>" == "cf" ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db /mnt/af2"
 [[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db /mnt/af2/esmfold_weights"
-[[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db --use_gpu"
+[[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db /mnt/af2 --use_gpu --skip_multiqc"
+[[ "<%= context.af_method %>" == "hf3" ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db /srv/scratch/sbf --alphafold2_db /mnt/af2 --use_gpu --skip_multiqc"
 
 module load cuda/12.2.1
 

@@ -3,5 +3,5 @@ category: Interactive Apps
 subcategory: Biology
 role: batch_connect
 description: |
-        <img src="https://nbtm.sh/SBF_logo.jpg" style="max-width: 200px"/><br>
-        <i>Computationally predict protein folds</i>
+        <img src="https://raw.githubusercontent.com/jscgh/kod-proteinfold/refs/heads/add-helixfold3/SBF_logo.jpg" style="max-width: 200px"/><br>
+        <i>Computationally predict protein structures</i>
