@@ -3,11 +3,11 @@
 set -x pipefail
 set -e
 
-export PATH="/srv/scratch/sbf/dev/kod/bin/:${PATH}"
-export APPTAINER_CACHEDIR="/srv/scratch/sbf/jsc/apptainer_cache"
-export SINGULARITY_CACHEDIR="/srv/scratch/sbf/jsc/apptainer_cache"
-export NXF_APPTAINER_CACHEDIR="/srv/scratch/sbf/jsc/apptainer_cache"
-export NXF_SINGULARITY_CACHEDIR="/srv/scratch/sbf/jsc/apptainer_cache"
+export PATH="/srv/scratch/sbf-pipelines/dev/kod/bin/:${PATH}"
+export APPTAINER_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
+export SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
+export NXF_APPTAINER_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
+export NXF_SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
 
 export PROTEINFOLD_VERSION="1.1.1"
 
