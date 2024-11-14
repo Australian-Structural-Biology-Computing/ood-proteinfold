@@ -1,5 +1,10 @@
 #!/bin/bash
 
+source .env
+# Set defaults to prod if .env is not found
+ENVIRONMENT=${ENVIRONMENT:-prod}
+PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
+
 set -x pipefail
 set -e
 
