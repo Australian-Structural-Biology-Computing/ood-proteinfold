@@ -13,12 +13,12 @@ export PROTEINFOLD_VERSION="1.1.1"
 
 function update_local_version() {
 	rm -rf "${HOME}/.proteinfold"	
-	cp -r /srv/scratch/sbf/proteinfold "${HOME}"
+	cp -r /srv/scratch/sbf-pipelines/proteinfold/dev "${HOME}"
 	mv "${HOME}/pipeline" "${HOME}/.proteinfold"
 }
 
 function pull_cluster_version() {
-	cp -r /srv/scratch/sbf/proteinfold/* .
+	cp -r /srv/scratch/sbf-pipelines/proteinfold/dev/* .
 }
 
 pull_cluster_version
@@ -31,7 +31,7 @@ user_input="<%= context.samplesheet %>"
 echo "${user_input}" >> $HOME/debug.txt
 
 OUT_DIR=$(echo "<%= context.run_name %>" | sed "s/[ \,\<\>\/\?\\\'\:]/\_/g")
-OUT_DIR="/srv/scratch/${USER}/proteinfold_output/${OUT_DIR}"
+OUT_DIR="/srv/scratch/${USER}/proteinfold/"
 mkdir -p "${OUT_DIR}"
 
 MODE=""
