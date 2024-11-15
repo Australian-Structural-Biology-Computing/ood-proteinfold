@@ -3,7 +3,7 @@
 set -x pipefail
 set -e
 
-export PATH="/srv/scratch/z5378336/dev/kod/bin/:${PATH}"
+export PATH="/srv/scratch/sbf/dev/kod/bin/:${PATH}"
 export APPTAINER_CACHEDIR="/srv/scratch/sbf/jsc/apptainer_cache"
 export SINGULARITY_CACHEDIR="/srv/scratch/sbf/jsc/apptainer_cache"
 export NXF_APPTAINER_CACHEDIR="/srv/scratch/sbf/jsc/apptainer_cache"
@@ -13,12 +13,12 @@ export PROTEINFOLD_VERSION="1.1.1"
 
 function update_local_version() {
 	rm -rf "${HOME}/.proteinfold"	
-	cp -r /srv/scratch/z5378336/proteinfold "${HOME}"
+	cp -r /srv/scratch/sbf/proteinfold "${HOME}"
 	mv "${HOME}/pipeline" "${HOME}/.proteinfold"
 }
 
 function pull_cluster_version() {
-	cp -r /srv/scratch/z5378336/proteinfold/* .
+	cp -r /srv/scratch/sbf/proteinfold/* .
 }
 
 pull_cluster_version
@@ -77,9 +77,7 @@ nextflow run main.nf \
 	--outdir "${OUT_DIR}" \
 	--mode "${PROT_MODE}" \
     --use_gpu \
-    --skip_multiqc \
-    --skip_visualisation \
 	${ARGS} \
-	-profile apptainer,katana
+	-profile apptainer,unsw_katana
 
 exit 0
