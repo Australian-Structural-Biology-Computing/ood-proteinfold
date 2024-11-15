@@ -17,26 +17,32 @@ attributes:
                 <li><b>Directory containing Fasta files</b> /srv/scratch/z3545907/Experiment</li>
                 <li><b>Amino acid sequence</b> MPGAFSQNSSKRRAVLPRSHR</li>
             </ul>
-    email:
+    run_name:
         widget: "text_field"
+        label: "Run Name"
+
+    af_method:
+        widget: "select"
+        label: "Method"
+        help: |
+            <ul>
+                <li><b>AlphaFold2.3</b> High Accuracy, Slower</li>
+                <li><b>ESMFold</b> Medium/Low Accuracy, Fastest, No Evolutionary Sequence Calculations</li>
+                <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower</li>
+                <li><b>HelixFold3</b> High Accuracy, Slower</li>
+            </ul>
+        options:
+            - ["Alphafold2", "af2", data-hide-mode: false]
+            - ["ESMFold", "esmf", data-hide-mode: true]
+            - ["RoseTTAFold-All-Atom", "rfaa", data-hide-mode: true]
+            - ["HelixFold3", "hf3", data-hide-mode: true]
+
     prot_mode:
         widget: "select"
         label: "Mode"
         options:
             - ["Multimer", "multimer"]
             - ["Monomer", "monomer"]
-    af_method:
-        widget: "select"
-        label: "Method"
-        help: |
-            <ul>
-                <li><b>AlphaFold 2.3</b> High Accuracy, Slower</li>
-                <li><b>ColabFold</b> Medium Accuracy, Faster</li>
-                <li><b>ESMFold</b> Medium/Low Accuracy, Fastest, No Evolutionary Sequence Calculations</li>
-            </ul>
-        options:
-            - ["Alphafold 2", "af2", data-hide-mode: false]
-            - ["ESMFold", "esmf", data-hide-mode: false]
-    run_name:
+
+    email:
         widget: "text_field"
-        label: "Run Name"
