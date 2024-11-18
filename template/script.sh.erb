@@ -68,7 +68,7 @@ then
 	for filename in *
 	do
 		echo "${filename}"
-		ln -s $(pwd)/${filename} $working_dir/fasta/$(basename ${filename} | sed --expression='s/\s/\-/g')
+		ln -s "$(pwd)/${filename}" $working_dir/fasta/$(echo ${filename} | sed --expression='g/\s/\-/s')
 	done
 
 	cd ${working_dir}
