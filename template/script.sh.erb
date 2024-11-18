@@ -2,28 +2,28 @@
 
 source .env
 # Set defaults to prod if .env is not found
-ENVIRONMENT=${ENVIRONMENT:-prod}
+RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
 PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 
 set -x pipefail
 set -e
 
-export PATH="${PROJECT_ROOT}/${ENVIRONMENT}/bin/:${PATH}"
-export APPTAINER_CACHEDIR="${PROJECT_ROOT}/${ENVIRONMENT}/singularity"
-export SINGULARITY_CACHEDIR="${PROJECT_ROOT}/${ENVIRONMENT}/singularity"
-export NXF_APPTAINER_CACHEDIR="${PROJECT_ROOT}/${ENVIRONMENT}/singularity"
-export NXF_SINGULARITY_CACHEDIR="${PROJECT_ROOT}/${ENVIRONMENT}/singularity"
+export PATH="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/bin/:${PATH}"
+export APPTAINER_CACHEDIR="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/singularity"
+export SINGULARITY_CACHEDIR="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/singularity"
+export NXF_APPTAINER_CACHEDIR="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/singularity"
+export NXF_SINGULARITY_CACHEDIR="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/singularity"
 
 export PROTEINFOLD_VERSION="1.1.1"
 
 function update_local_version() {
 	rm -rf "${HOME}/.proteinfold"	
-	cp -r ${PROJECT_ROOT}/${ENVIRONMENT}/pipeline "${HOME}"
+	cp -r ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/pipeline "${HOME}"
 	mv "${HOME}/pipeline" "${HOME}/.proteinfold"
 }
 
 function pull_cluster_version() {
-	cp -r ${PROJECT_ROOT}/${ENVIRONMENT}/pipeline/* .
+	cp -r ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/pipeline/* .
 }
 
 pull_cluster_version
