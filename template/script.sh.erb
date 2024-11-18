@@ -63,11 +63,15 @@ fi
 if [ "${MODE}" == "DIRECTORY" ];
 then
 	mkdir fasta
-	for filename in "${user_input}/*"
+	working_dir=$(pwd)
+	cd "${user_input}"
+	for filename in *
 	do
-		ln -s ${filename} $(basename ${user_input} | sed 'g/ /-/s')
+		echo "${filename}"
+		ln -s $(pwd)/${filename} $working_dir/fasta/$(basename ${filename} | sed --expression='s/\s/\-/g')
 	done
 
+	cd ${working_dir}
 	create-samplesheet --directory "./fasta" --suffix "<%= context.prot_mode %>"
 	SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
