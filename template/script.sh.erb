@@ -2,28 +2,28 @@
 
 source .env
 # Set defaults to prod if .env is not found
-ENVIRONMENT=${ENVIRONMENT:-prod}
+RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
 PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 
 set -x pipefail
 set -e
 
-export PATH="/srv/scratch/sbf-pipelines/dev/kod/bin/:${PATH}"
-export APPTAINER_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
-export SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
-export NXF_APPTAINER_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
-export NXF_SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
+export PATH="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/bin/:${PATH}"
+export APPTAINER_CACHEDIR="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/singularity"
+export SINGULARITY_CACHEDIR="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/singularity"
+export NXF_APPTAINER_CACHEDIR="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/singularity"
+export NXF_SINGULARITY_CACHEDIR="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/singularity"
 
 export PROTEINFOLD_VERSION="1.1.1"
 
 function update_local_version() {
 	rm -rf "${HOME}/.proteinfold"	
-	cp -r /srv/scratch/sbf-pipelines/proteinfold/dev "${HOME}"
+	cp -r ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/pipeline "${HOME}"
 	mv "${HOME}/pipeline" "${HOME}/.proteinfold"
 }
 
 function pull_cluster_version() {
-	cp -r /srv/scratch/sbf-pipelines/proteinfold/dev/* .
+	cp -r ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/pipeline/* .
 }
 
 pull_cluster_version
@@ -62,7 +62,17 @@ fi
 
 if [ "${MODE}" == "DIRECTORY" ];
 then
-	create-samplesheet --directory "${user_input}" --suffix "<%= context.prot_mode %>"
+	mkdir fasta
+	working_dir=$(pwd)
+	cd "${user_input}"
+	for filename in *
+	do
+		echo "${filename}"
+		ln -s "$(pwd)/${filename}" $working_dir/fasta/$(echo ${filename} | sed --expression='s/\s/\-/g')
+	done
+
+	cd ${working_dir}
+	create-samplesheet --directory "./fasta" --suffix "<%= context.prot_mode %>"
 	SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
