@@ -1,8 +1,8 @@
 form:
     - samplesheet
     - run_name
-    - af_method 
-    - prot_mode 
+    - af_method
+    - prot_mode
     - email
 
 cluster: "katana"
@@ -12,14 +12,21 @@ attributes:
         widget: "text_field"
         pattern: "*.csv^"
         help: |
-            Acceptable inputs
+            <h4>Acceptable inputs</h4>
             <ul>
-                <li><b>Directory containing Fasta files</b> /srv/scratch/z3545907/Experiment</li>
-                <li><b>Amino acid sequence</b> MPGAFSQNSSKRRAVLPRSHR</li>
+                <li>
+                    <b>Directory containing Fasta files:</b>
+                    <code>/srv/scratch/z3141592/my_experiment</code>
+                </li>
+                <li>
+                    <b>Amino acid sequence:</b>
+                    <code>NLYIQWLKDGGPSSGRPPPS</code>
+                </li>
             </ul>
     run_name:
         widget: "text_field"
         label: "Run Name"
+        placeholder: "Enter your run name"
 
     af_method:
         widget: "select"
@@ -27,7 +34,7 @@ attributes:
         help: |
             <ul>
                 <li><b>AlphaFold2.3</b> High Accuracy, Slower</li>
-                <li><b>ESMFold</b> Medium/Low Accuracy, Fastest, No Evolutionary Sequence Calculations</li>
+                <li><b>ESMFold</b> Medium/Low Accuracy, Fastest (No Evolutionary Sequence Calculations)</li>
                 <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower</li>
                 <li><b>HelixFold3</b> High Accuracy, Slower</li>
             </ul>
@@ -46,3 +53,5 @@ attributes:
 
     email:
         widget: "text_field"
+        label: "Email Address"
+        placeholder: "Enter your email (optional)"

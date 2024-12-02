@@ -8,22 +8,23 @@ PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 set -x pipefail
 set -e
 
+CACHE="/srv/scratch/sbf-pipelines/proteinfold/singularity"
 export PATH="/srv/scratch/sbf-pipelines/dev/kod/bin/:${PATH}"
-export APPTAINER_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
-export SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
-export NXF_APPTAINER_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
-export NXF_SINGULARITY_CACHEDIR="/srv/scratch/sbf-pipelines/proteinfold/singularity"
+export APPTAINER_CACHEDIR=$CACHE
+export SINGULARITY_CACHEDIR=$CACHE
+export NXF_APPTAINER_CACHEDIR=$CACHE
+export NXF_SINGULARITY_CACHEDIR=$CACHE
 
-export PROTEINFOLD_VERSION="1.1.1"
+export PROTEINFOLD_VERSION="dev"
 
 function update_local_version() {
 	rm -rf "${HOME}/.proteinfold"	
-	cp -r /srv/scratch/sbf-pipelines/proteinfold/dev "${HOME}"
+	cp -r /srv/scratch/z5378336/proteinfold "${HOME}"
 	mv "${HOME}/pipeline" "${HOME}/.proteinfold"
 }
 
 function pull_cluster_version() {
-	cp -r /srv/scratch/sbf-pipelines/proteinfold/dev/* .
+	cp -r /srv/scratch/z5378336/proteinfold/* .
 }
 
 pull_cluster_version
@@ -72,8 +73,8 @@ ARGS=""
 [[ "<%= context.af_method %>" == "af2" ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db /mnt/af2 --alphafold2_mode split_msa_prediction --full_dbs true --alphafold2_model_preset <%= context.prot_mode %>"
 [[ "<%= context.af_method %>" == "cf" ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db /mnt/af2"
 [[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db /mnt/af2/esmfold_weights"
-[[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db /mnt/af2 --skip_multiqc"
-[[ "<%= context.af_method %>" == "hf3" ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db /srv/scratch/sbf --alphafold2_db /mnt/af2 --skip_multiqc"
+[[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db /mnt/af2"
+[[ "<%= context.af_method %>" == "hf3" ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db /mnt/af2"
 
 module load cuda/12.2.1
 
