@@ -9,7 +9,7 @@ set -x pipefail
 set -e
 
 CACHE="/srv/scratch/sbf-pipelines/proteinfold/singularity"
-export PATH="/srv/scratch/sbf-pipelines/dev/kod/bin/:${PATH}"
+export PATH="/srv/scratch/sbf-pipelines/proteinfold/dev/bin/:${PATH}"
 export APPTAINER_CACHEDIR=$CACHE
 export SINGULARITY_CACHEDIR=$CACHE
 export NXF_APPTAINER_CACHEDIR=$CACHE
