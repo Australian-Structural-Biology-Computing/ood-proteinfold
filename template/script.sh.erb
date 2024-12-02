@@ -15,16 +15,16 @@ export SINGULARITY_CACHEDIR=$CACHE
 export NXF_APPTAINER_CACHEDIR=$CACHE
 export NXF_SINGULARITY_CACHEDIR=$CACHE
 
-export PROTEINFOLD_VERSION="dev"
+export PROTEINFOLD_VERSION="1.1.1"
 
 function update_local_version() {
 	rm -rf "${HOME}/.proteinfold"	
-	cp -r /srv/scratch/z5378336/proteinfold "${HOME}"
+	cp -r /srv/scratch/sbf-pipelines/proteinfold/dev "${HOME}"
 	mv "${HOME}/pipeline" "${HOME}/.proteinfold"
 }
 
 function pull_cluster_version() {
-	cp -r /srv/scratch/z5378336/proteinfold/* .
+	cp -r /srv/scratch/sbf-pipelines/proteinfold/dev/* .
 }
 
 pull_cluster_version
