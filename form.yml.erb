@@ -33,15 +33,17 @@ attributes:
         label: "Method"
         help: |
             <ul>
+                <li><b>Boltz-1</b> High Accuracy, Faster (Open AlphaFold3 method)</li>
                 <li><b>AlphaFold2.3</b> High Accuracy, Slower</li>
                 <li><b>ESMFold</b> Medium/Low Accuracy, Fastest (No Evolutionary Sequence Calculations)</li>
-                <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower</li>
+                <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower; optimised for atomic-level modeling</li>
                 <li style="color:red;">
-                <b>HelixFold3</b> High Accuracy, Slower
+                <b>HelixFold3</b> High Accuracy, Slower (Restricted AlphaFold3 method)
                 <br><span><b>WARNING: Non-commercial use only!</b></span>
                 </li>
             </ul>
         options:
+            - ["Boltz-1", "bz1", data-hide-mode: true]
             - ["Alphafold2", "af2", data-hide-mode: false]
             - ["ESMFold", "esmf", data-hide-mode: true]
             - ["RoseTTAFold-All-Atom", "rfaa", data-hide-mode: true]
@@ -51,8 +53,8 @@ attributes:
         widget: "select"
         label: "Mode"
         options:
-            - ["Multimer", "multimer"]
             - ["Monomer", "monomer"]
+            - ["Multimer", "multimer"]
 
     email:
         widget: "text_field"
