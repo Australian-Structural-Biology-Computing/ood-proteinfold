@@ -17,7 +17,7 @@ export NXF_SINGULARITY_CACHEDIR="${PROJECT_ROOT}/singularity"
 export PROTEINFOLD_VERSION="1.1.1"
 
 function update_local_version() {
-	rm -rf "${HOME}/.proteinfold"	
+	rm -rf "${HOME}/.proteinfold"
 	cp -r ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/pipeline "${HOME}"
 	mv "${HOME}/pipeline" "${HOME}/.proteinfold"
 }
@@ -47,7 +47,7 @@ MODE=""
 echo "${MODE}"
 
 create-samplesheet --version
-SAMPLESHEET="" 
+SAMPLESHEET=""
 
 if [ "${MODE}" == "MANUAL_INPUT" ];
 then
