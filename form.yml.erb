@@ -11,6 +11,8 @@ attributes:
     samplesheet:
         widget: "text_field"
         pattern: "*.csv^"
+        placeholder: "path/to/file(s) or sequence 'NLYIQWLKDGGPSSGRPPPS'"
+        required: true
         help: |
             <h4>Acceptable inputs</h4>
             <ul>
@@ -35,9 +37,9 @@ attributes:
             <ul>
                 <li><b>AlphaFold2.3</b> High Accuracy, Slower</li>
                 <li><b>ESMFold</b> Medium/Low Accuracy, Fastest (No Evolutionary Sequence Calculations)</li>
-                <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower</li>
+                <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower; optimised for atomic-level modeling</li>
                 <li style="color:red;">
-                <b>HelixFold3</b> High Accuracy, Slower
+                <b>HelixFold3</b> High Accuracy, Slower (Restricted AlphaFold3 method)
                 <br><span><b>WARNING: Non-commercial use only!</b></span>
                 </li>
             </ul>
@@ -51,8 +53,8 @@ attributes:
         widget: "select"
         label: "Mode"
         options:
-            - ["Multimer", "multimer"]
             - ["Monomer", "monomer"]
+            - ["Multimer", "multimer"]
 
     email:
         widget: "text_field"
