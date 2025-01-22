@@ -35,11 +35,11 @@ attributes:
         label: "Method"
         help: |
             <ul>
-                <li><b>AlphaFold2.3</b> High Accuracy, Slower</li>
-                <li><b>ESMFold</b> Medium/Low Accuracy, Fastest (No Evolutionary Sequence Calculations)</li>
-                <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower; optimised for atomic-level modeling</li>
+                <li><b>AlphaFold2.3</b> High Accuracy, Slower - <a href="https://doi.org/10.1038/s41586-021-03819-2">Paper</a></li>
+                <li><b>ESMFold</b> Medium/Low Accuracy, Fastest (No Evolutionary Sequence Calculations) - <a href="https://doi.org/10.1126/science.ade2574">Paper</a></li>
+                <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower; optimised for atomic-level modeling - <a href="https://doi.org/10.1126/science.adl2528">Paper</a></li>
                 <li style="color:red;">
-                <b>HelixFold3</b> High Accuracy, Slower (Restricted AlphaFold3 method)
+                <b>HelixFold3</b> High Accuracy, Slower (Restricted AlphaFold3 method) - <a href="https://doi.org/10.48550/arXiv.2408.16975">Pre-print</a>
                 <br><span><b>WARNING: Non-commercial use only!</b></span>
                 </li>
             </ul>
@@ -60,3 +60,12 @@ attributes:
         widget: "text_field"
         label: "Email Address"
         placeholder: "Enter your email (optional)"
+
+   citation_request:
+        widget: "text_area"
+        label: "facility_citation"
+        value: "doi.org/10.26190/4KQF-M552"
+        help: |
+            Please cite the above DOI and include this following acknowledgement in any publication that uses this resource:
+            <i>"The authors acknowledge use of facilities in the Structural Biology Facility within the Mark Wainwright Analytical Centre – UNSW,</i>
+            <i>funded in part by the Australian Research Council Linkage Infrastructure, Equipment and Facilities Grant: ARC LIEF <b>190100165</b>"</i>
