@@ -11,24 +11,15 @@ attributes:
     samplesheet:
         widget: "text_field"
         pattern: "*.csv^"
-        placeholder: "path/to/file(s) or sequence 'NLYIQWLKDGGPSSGRPPPS'"
-        required: true
         help: |
-            <h4>Acceptable inputs</h4>
+            Acceptable inputs
             <ul>
-                <li>
-                    <b>Directory containing Fasta files:</b>
-                    <code>/srv/scratch/z3141592/my_experiment</code>
-                </li>
-                <li>
-                    <b>Amino acid sequence:</b>
-                    <code>NLYIQWLKDGGPSSGRPPPS</code>
-                </li>
+                <li><b>Directory containing Fasta files</b> /srv/scratch/z3545907/Experiment</li>
+                <li><b>Amino acid sequence</b> MPGAFSQNSSKRRAVLPRSHR</li>
             </ul>
     run_name:
         widget: "text_field"
         label: "Run Name"
-        placeholder: "Enter your run name"
 
     af_method:
         widget: "select"
@@ -36,12 +27,9 @@ attributes:
         help: |
             <ul>
                 <li><b>AlphaFold2.3</b> High Accuracy, Slower</li>
-                <li><b>ESMFold</b> Medium/Low Accuracy, Fastest (No Evolutionary Sequence Calculations)</li>
-                <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower; optimised for atomic-level modeling</li>
-                <li style="color:red;">
-                <b>HelixFold3</b> High Accuracy, Slower (Restricted AlphaFold3 method)
-                <br><span><b>WARNING: Non-commercial use only!</b></span>
-                </li>
+                <li><b>ESMFold</b> Medium/Low Accuracy, Fastest, No Evolutionary Sequence Calculations</li>
+                <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower</li>
+                <li><b>HelixFold3</b> High Accuracy, Slower</li>
             </ul>
         options:
             - ["Alphafold2", "af2", data-hide-mode: false]
@@ -53,10 +41,8 @@ attributes:
         widget: "select"
         label: "Mode"
         options:
-            - ["Monomer", "monomer"]
             - ["Multimer", "multimer"]
+            - ["Monomer", "monomer"]
 
     email:
         widget: "text_field"
-        label: "Email Address"
-        placeholder: "Enter your email (optional)"
