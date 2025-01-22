@@ -5,7 +5,7 @@ batch_connect:
 
 script:
     native:
-        - "-A kod_alphafold2 -q mwacgpu -l ngpus=1,ncpus=8,mem=125gb,walltime=12:00:00"
+        - "-A kod_proteinfold -q mwacgpu -l ngpus=1:ncpus=8:mem=125gb:walltime=12:00:00"
     walltime: 43200
     email:
         - "<%= ENV['USER'] %>@ad.unsw.edu.au"
