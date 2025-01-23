@@ -17,6 +17,8 @@ export NXF_WORK="/srv/scratch/$USER/.proteinfold/work"
 
 export PROTEINFOLD_VERSION="1.1.1"
 
+mkdir -p "${NFX_WORK}"
+
 function update_local_version() {
 	rm -rf "${HOME}/.proteinfold"
 	cp -r ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/pipeline "${HOME}"
