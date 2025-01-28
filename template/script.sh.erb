@@ -13,7 +13,7 @@ export APPTAINER_CACHEDIR="${PROJECT_ROOT}/singularity"
 export SINGULARITY_CACHEDIR="${PROJECT_ROOT}/singularity"
 export NXF_APPTAINER_CACHEDIR="${PROJECT_ROOT}/singularity"
 export NXF_SINGULARITY_CACHEDIR="${PROJECT_ROOT}/singularity"
-export NXF_WORK="/srv/scratch/$USER/.proteinfold/work"
+export NXF_WORK="/srv/scratch/${USER}/.proteinfold/work"
 
 export PROTEINFOLD_VERSION="1.1.1"
 
@@ -38,8 +38,8 @@ module load java/21 nextflow/24
 user_input="<%= context.samplesheet %>"
 echo "${user_input}" >> $HOME/debug.txt
 
-OUT_DIR=$(echo "<%= context.run_name %>" | sed "s/[ \,\<\>\/\?\\\'\:]/\_/g")
-OUT_DIR="/srv/scratch/${USER}/proteinfold/"
+RUN_DIR=$(echo "<%= context.run_name %>" | sed "s/[ \,\<\>\/\?\\\'\:]/\_/g")
+OUT_DIR="/srv/scratch/${USER}/proteinfold_output/${RUN_DIR}""
 mkdir -p "${OUT_DIR}"
 
 MODE=""
