@@ -39,7 +39,7 @@ user_input="<%= context.samplesheet %>"
 echo "${user_input}" >> $HOME/debug.txt
 
 RUN_DIR=$(echo "<%= context.run_name %>" | sed "s/[ \,\<\>\/\?\\\'\:]/\_/g")
-OUT_DIR="/srv/scratch/${USER}/proteinfold_output/${RUN_DIR}""
+OUT_DIR="/srv/scratch/${USER}/proteinfold_output/${RUN_DIR}"
 mkdir -p "${OUT_DIR}"
 
 MODE=""
