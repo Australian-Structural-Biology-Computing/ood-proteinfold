@@ -13,20 +13,20 @@ export APPTAINER_CACHEDIR="${PROJECT_ROOT}/singularity"
 export SINGULARITY_CACHEDIR="${PROJECT_ROOT}/singularity"
 export NXF_APPTAINER_CACHEDIR="${PROJECT_ROOT}/singularity"
 export NXF_SINGULARITY_CACHEDIR="${PROJECT_ROOT}/singularity"
-export NXF_WORK="/srv/scratch/$USER/.proteinfold/work"
+export NXF_WORK="/srv/scratch/${USER}/.proteinfold/work"
 
 export PROTEINFOLD_VERSION="1.1.1"
 
 mkdir -p "${NXF_WORK}"
 
 function update_local_version() {
-	rm -rf "${HOME}/.proteinfold"
-	cp -r ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/pipeline "${HOME}"
-	mv "${HOME}/pipeline" "${HOME}/.proteinfold"
+    rm -rf "${HOME}/.proteinfold"
+    cp -r ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/pipeline "${HOME}"
+    mv "${HOME}/pipeline" "${HOME}/.proteinfold"
 }
 
 function pull_cluster_version() {
-	cp -r ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/pipeline/* .
+    cp -r ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/pipeline/* .
 }
 
 pull_cluster_version
@@ -38,8 +38,8 @@ module load java/21 nextflow/24
 user_input="<%= context.samplesheet %>"
 echo "${user_input}" >> $HOME/debug.txt
 
-OUT_DIR=$(echo "<%= context.run_name %>" | sed "s/[ \,\<\>\/\?\\\'\:]/\_/g")
-OUT_DIR="/srv/scratch/${USER}/proteinfold/"
+RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
+OUT_DIR="/srv/scratch/${USER}/proteinfold_output/${RUN_DIR}"
 mkdir -p "${OUT_DIR}"
 
 MODE=""
@@ -54,29 +54,29 @@ SAMPLESHEET=""
 
 if [ "${MODE}" == "MANUAL_INPUT" ];
 then
-	create-samplesheet --aa-string "${user_input}" --suffix "<%= context.prot_mode %>"
-	SAMPLESHEET="$(pwd)/samplesheet.csv"
+    create-samplesheet --aa-string "${user_input}" --suffix "<%= context.prot_mode %>"
+    SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
 if [ "${MODE}" == "SAMPLESHEET_INPUT" ];
 then
-	SAMPLESHEET="${user_input}"
+    SAMPLESHEET="${user_input}"
 fi
 
 if [ "${MODE}" == "DIRECTORY" ];
 then
-	mkdir fasta
-	working_dir=$(pwd)
-	cd "${user_input}"
-	for filename in *
-	do
-		echo "${filename}"
-		ln -s "$(pwd)/${filename}" $working_dir/fasta/$(echo ${filename} | sed --expression='s/\s/\-/g')
-	done
+    mkdir fasta
+    working_dir=$(pwd)
+    cd "${user_input}"
+    for filename in *
+    do
+        echo "${filename}"
+        ln -s "$(pwd)/${filename}" $working_dir/fasta/$(echo ${filename} | sed --expression='s/\s/\-/g')
+    done
 
-	cd ${working_dir}
-	create-samplesheet --directory "./fasta" --suffix "<%= context.prot_mode %>"
-	SAMPLESHEET="$(pwd)/samplesheet.csv"
+    cd ${working_dir}
+    create-samplesheet --directory "./fasta" --suffix "<%= context.prot_mode %>"
+    SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
 PROT_MODE=""
@@ -90,12 +90,12 @@ ARGS=""
 
 module load cuda/10.1.243 cuda/11.8.0 cuda/12.2.1 cuda/12.5.0 cudnn/8.4.0.27-11.6 cudnn/8.6.0.163-11.8 cudnn/9.2.0.82-12 cudnn/9.3.0.75-12
 
-nextflow run main.nf \
-	--input "${SAMPLESHEET}" \
-	--outdir "${OUT_DIR}" \
-	--mode "${PROT_MODE}" \
+nextflow -c "/srv/scratch/sbf-pipelines/proteinfold/kod_proteinfold.config" run main.nf \
+    --input "${SAMPLESHEET}" \
+    --outdir "${OUT_DIR}" \
+    --mode "${PROT_MODE}" \
     --use_gpu \
-	${ARGS} \
-	-profile singularity
+    ${ARGS} \
+    -profile singularity,unsw_katana
 
 exit 0

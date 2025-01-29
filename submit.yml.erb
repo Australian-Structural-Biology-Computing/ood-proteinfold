@@ -6,8 +6,9 @@ batch_connect:
 script:
     native:
         - "-A kod_proteinfold"
-        - "-l select=1:ngpus=1:ncpus=8:mem=125gb"
-        - "-l walltime=12:00:00"
+        - "-l select=1:ngpus=1:ncpus=2:mem=2gb"
+        - "-l walltime=48:00:00"
+        - "-N kod_proteinfold"
     email:
         - "<%= ENV['USER'] %>@ad.unsw.edu.au"
     email_on_terminated: "<%= email_on_terminated %>"
