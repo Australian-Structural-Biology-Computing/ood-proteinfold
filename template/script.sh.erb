@@ -84,6 +84,7 @@ ARGS=""
 
 [[ "<%= context.af_method %>" == "af2" ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db /mnt/af2 --full_dbs true --alphafold2_model_preset <%= context.prot_mode %>"
 [[ "<%= context.af_method %>" == "bz1" ]] && PROT_MODE="boltz" && ARGS="--boltz_db /mnt/af2/boltz"
+[[ "<%= context.af_method %>" == "ci1" ]] && PROT_MODE="chai1" && ARGS="--chai1_db /mnt/af2/chai1"
 [[ "<%= context.af_method %>" == "cf" ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db /mnt/af2"
 [[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db /mnt/af2/esmfold_weights"
 [[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db /mnt/af2"
@@ -91,7 +92,7 @@ ARGS=""
 
 module load cuda/10.1.243 cuda/11.8.0 cuda/12.2.1 cuda/12.5.0 cudnn/8.4.0.27-11.6 cudnn/8.6.0.163-11.8 cudnn/9.2.0.82-12 cudnn/9.3.0.75-12
 
-nextflow -c "/srv/scratch/sbf-pipelines/proteinfold/kod_proteinfold.config" run main.nf \
+nextflow -c "/srv/scratch/sbf-pipelines/proteinfold/kod_proteinfold-dev.config" run main.nf \
     --input "${SAMPLESHEET}" \
     --outdir "${OUT_DIR}" \
     --mode "${PROT_MODE}" \
