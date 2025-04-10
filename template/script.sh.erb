@@ -60,7 +60,7 @@ SAMPLESHEET=""
 
 if [ "${MODE}" == "MANUAL_INPUT" ];
 then
-    create-samplesheet --aa-string "${user_input}" --suffix "<%= context.prot_mode %>"
+    create-samplesheet --sequence-header "id" --aa-string "${user_input}" --suffix "<%= context.prot_mode %>"
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
@@ -81,7 +81,7 @@ then
     done
 
     cd ${working_dir}
-    create-samplesheet --directory "./fasta" --suffix "<%= context.prot_mode %>"
+    create-samplesheet --sequence-header "id" --directory "./fasta" --suffix "<%= context.prot_mode %>"
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
