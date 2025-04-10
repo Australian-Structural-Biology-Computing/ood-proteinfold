@@ -8,7 +8,9 @@ PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 set -x pipefail
 set -e
 
-export PATH="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/bin/:${PATH}"
+# Load samplesheet-utils virtual environment 
+source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
+
 export APPTAINER_CACHEDIR="${PROJECT_ROOT}/singularity"
 export SINGULARITY_CACHEDIR="${PROJECT_ROOT}/singularity"
 export NXF_APPTAINER_CACHEDIR="${PROJECT_ROOT}/singularity"
