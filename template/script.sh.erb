@@ -9,11 +9,17 @@ set -x pipefail
 set -e
 
 export PATH="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/bin/:${PATH}"
-export APPTAINER_CACHEDIR="${PROJECT_ROOT}/singularity"
-export SINGULARITY_CACHEDIR="${PROJECT_ROOT}/singularity"
-export NXF_APPTAINER_CACHEDIR="${PROJECT_ROOT}/singularity"
-export NXF_SINGULARITY_CACHEDIR="${PROJECT_ROOT}/singularity"
 export NXF_WORK="/srv/scratch/${USER}/.proteinfold/work"
+
+# Native environment cacheDir used for caching blobs during image pulls
+export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
+export SINGULARITY_CACHEDIR="${SINGULARITY_CACHEDIR:-/srv/scratch/${USER}/.images}"
+
+# Nextflow variables, checks libraryDir and if image is not found downloads to cache
+export NXF_APPTAINER_CACHEDIR="${NXF_APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
+export NXF_SINGULARITY_CACHEDIR="${NXF_SINGULARITY_CACHEDIR:-/srv/scratch/${USER}/.images}"
+export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
+export NXF_SINGULARITY_LIBRARYDIR="${NXF_SINGULARITY_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
 
 export PROTEINFOLD_VERSION="1.1.1"
 
