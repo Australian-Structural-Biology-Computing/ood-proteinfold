@@ -8,7 +8,9 @@ PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 set -x pipefail
 set -e
 
-export PATH="${PROJECT_ROOT}/${RUN_ENVIRONMENT}/bin/:${PATH}"
+# Load samplesheet-utils virtual environment 
+source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
+
 export NXF_WORK="/srv/scratch/${USER}/.proteinfold/work"
 
 # Native environment cacheDir used for caching blobs during image pulls
