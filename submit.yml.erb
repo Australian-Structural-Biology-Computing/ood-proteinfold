@@ -2,6 +2,9 @@ batch_connect:
     template: "basic"
     queue_name: "submission"
     script_file: "/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh"
+    conn_params:
+        - run_dir
+        - user
 
 script:
     native:

@@ -5,7 +5,6 @@ form:
     - prot_mode
     - email
 
-
 cluster: "katana"
 
 attributes:
@@ -30,6 +29,9 @@ attributes:
         widget: "text_field"
         label: "Run Name"
         placeholder: "Enter your run name"
+        pattern: '^[A-Za-z0-9_]+$'
+        help: |
+            <a>Alphanumeric and "_" only</a>
 
     af_method:
         widget: "select"
@@ -44,6 +46,7 @@ attributes:
             - ["Alphafold2", "af2", data-hide-mode: false]
             - ["ESMFold", "esmf", data-hide-mode: true]
             - ["RoseTTAFold-All-Atom", "rfaa", data-hide-mode: true]
+        display: true
 
     prot_mode:
         widget: "select"
@@ -51,6 +54,7 @@ attributes:
         options:
             - ["Monomer", "monomer"]
             - ["Multimer", "multimer"]
+        display: true
 
     email:
         widget: "text_field"
