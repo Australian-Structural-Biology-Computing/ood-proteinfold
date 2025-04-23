@@ -8,6 +8,10 @@ PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 set -x pipefail
 set -e
 
+# Set dependency version numbers
+VERSION_SAMPLESHEET_UTILS="1.1.2"
+VERISON_PROTEINFOLD_HASH="fd01013a6109300c917e12356bce0d2297ed1a0e"
+
 # Load samplesheet-utils virtual environment 
 source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
 
@@ -27,6 +31,30 @@ export PROTEINFOLD_VERSION="1.1.1"
 
 mkdir -p "${NXF_WORK}"
 
+function check_depend_version() {
+	# Ensure that script is running in prod
+	if [ "${RUN_ENVIRONMENT}" == "prod" ]; then
+			# Check samplesheet utils
+			LOCAL_SAMPLESHEET_VERSION=$(pip3 list 2>&1 | grep samplesheetutils | cut -d' ' -f2)
+			if [ "${LOCAL_SAMPLESHEET_VERSION}" != "${VERSION_SAMPLESHEET_UTILS}"]; then
+				echo "VERSION MISMATCH! samplesheet-utils does not match expected version. installed version is ${LOCAL_SAMPLESHEET_VERSION}, expected ${VERSION_SAMPLESHEET_UTILS}"
+				exit 1
+			fi
+
+			# Check pipeline version
+			$tmp_prev_wd=$(pwd)
+			cd "${PROJECT_ROOT}/${RUN_ENVIRONMENT}"
+			LOCAL_PROTEINFOLD_HASH="git rev-parse HEAD"	
+			if [ "${LOCAL_PROTEINFOLD_VERSION}" != "${VERISON_PROTEINFOLD_HASH}"]; then
+				echo "VERSION MISMATCH! proteinfold does not match expected version. installed version is ${LOCAL_PROTEINFOLD_VERSION}, expected ${VERSION_PROTEINFOLD_HASH}"
+				exit 1
+			fi
+
+			# Go back to previous working directory
+			cd ${tmp_prev_wd}
+	fi
+}
+
 function update_local_version() {
     rm -rf "${HOME}/.proteinfold"
     cp -r ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/pipeline "${HOME}"
@@ -38,6 +66,7 @@ function pull_cluster_version() {
 }
 
 pull_cluster_version
+check_depend_version
 
 module purge
 module load java/21 nextflow/24
