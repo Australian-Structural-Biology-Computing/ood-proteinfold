@@ -107,7 +107,7 @@ ARGS=""
 
 module load cuda/10.1.243 cuda/11.8.0 cuda/12.2.1 cuda/12.5.0 cudnn/8.4.0.27-11.6 cudnn/8.6.0.163-11.8 cudnn/9.2.0.82-12 cudnn/9.3.0.75-12
 
-nextflow -c "/srv/scratch/sbf-pipelines/proteinfold/kod_proteinfold.config" run Australian-Structural-Biology-Computing/proteinfold -r dev \
+nextflow -c "/srv/scratch/sbf-pipelines/proteinfold/kod_proteinfold.config" run Australian-Structural-Biology-Computing/proteinfold -r dev -latest \
     --input "${SAMPLESHEET}" \
     --outdir "${OUT_DIR}" \
     --mode "${PROT_MODE}" \
