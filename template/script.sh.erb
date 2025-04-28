@@ -63,7 +63,7 @@ SAMPLESHEET=""
 af_method="<%= context.af_method %>"
 OUTPUT_FORMAT=""
 case "${af_method}" in
-    rfaa) OUTPUT_FORMAT="--yaml" ;;
+    rfaa) OUTPUT_FORMAT="--yaml-rfaa" ;;
     hf3)  OUTPUT_FORMAT="--json" ;;
     *)    OUTPUT_FORMAT="" ;;
 esac
