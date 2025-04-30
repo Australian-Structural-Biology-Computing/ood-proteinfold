@@ -1,0 +1,23 @@
+name: Deploy new development
+on:
+    release:
+        types: [published]
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Set up SSH Key
+              run: |
+                env
+                mkdir -p ~/.ssh
+                echo "${{ secrets.ARTIFACT_SSH_KEY }}" > ~/.ssh/id_ed25519
+                chmod 600 ~/.ssh/id_ed25519
+                ssh-keyscan -p 22 "${{ secrets.ARTIFACT_HOST }}" >> ~/.ssh/known_hosts
+            - name: Deploy new code
+              run: |
+                ssh -v -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.USER }}@${{ secrets.HOST }} <<'ENDSSH'
+                cd ${{ secrets.APP_PATH}}/prod/kod-proteinfold
+                git pull
+                git checkout $GITHUB.SHA
+                ENDSSH
