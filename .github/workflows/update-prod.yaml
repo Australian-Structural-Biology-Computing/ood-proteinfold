@@ -19,6 +19,6 @@ jobs:
                 ssh -v -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.USER }}@${{ secrets.HOST }} <<'ENDSSH'
                 cd ${{ secrets.APP_PATH}}/prod/kod-proteinfold
                 git fetch
-                git checkout $(( github.sha ))
+                git checkout ${{ github.sha }}
                 git pull
                 ENDSSH
