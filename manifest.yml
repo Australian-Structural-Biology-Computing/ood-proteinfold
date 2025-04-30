@@ -3,5 +3,5 @@ name: Proteinfold
 category: Interactive Apps
 subcategory: Biology
 role: batch_connect
-description: "<img src=\"https://raw.githubusercontent.com/Australian-Structural-Biology-Computing/kod-proteinfold/refs/heads/master/SBF_logo.jpg\"
+description: "<img src=\"https://raw.githubusercontent.com/unsw-edu-au/kod-proteinfold/refs/heads/master/SBF_logo.jpg\"
   style=\"max-width: 200px\"/><br>\r\n<i>Computationally predict protein structures</i>\r\n"
