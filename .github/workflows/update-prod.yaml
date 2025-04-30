@@ -24,7 +24,7 @@ jobs:
               run: |
                 ssh -v -i ~/.ssh/id_ed25519 \
                     -o StrictHostKeyChecking=no \
-                    "$SSH_USER@$SSH_HOST" <<EOF
+                    "$SSH_USER@$SSH_HOST" <<ENDSSH
                 cd "$APP_PATH/prod/kod-proteinfold"
                 git fetch --all
                 git reset --hard "$RELEASE_TAG"
