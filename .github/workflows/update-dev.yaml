@@ -7,18 +7,23 @@ on:
 jobs:
     deploy:
         runs-on: ubuntu-latest
+        env:
+          SSH_KEY: ${{ secrets.ARTIFACT_SSH_KEY }}
+          SSH_HOST: ${{ secrets.ARTIFACT_HOST }}
+          SSH_USER: ${{ secrets.USER }}
+          APP_PATH: ${{ secrets.APP_PATH }}
         steps:
             - name: Set up SSH Key
               run: |
-                env
                 mkdir -p ~/.ssh
-                echo "${{ secrets.ARTIFACT_SSH_KEY }}" > ~/.ssh/id_ed25519
+                echo "$SSH_KEY" > ~/.ssh/id_ed25519
                 chmod 600 ~/.ssh/id_ed25519
-                ssh-keyscan -p 22 "${{ secrets.ARTIFACT_HOST }}" >> ~/.ssh/known_hosts
+                ssh-keyscan -H -p 22 "$SSH_HOST" >> ~/.ssh/known_hosts
             - name: Deploy new code
               run: |
-                ssh -v -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no ${{ secrets.USER }}@${{ secrets.HOST }} <<'ENDSSH'
-                cd ${{ secrets.APP_PATH}}/dev
-                git pull
-                git checkout master
+                ssh -i ~/.ssh/id_ed25519 "$SSH_USER@$SSH_HOST" <<'ENDSSH'
+                set -euo pipefail
+                cd "$APP_PATH/dev"
+                git fetch --all
+                git reset --hard origin/master
                 ENDSSH
