@@ -15,7 +15,6 @@ jobs:
         steps:
             - name: Set up SSH Key
               run: |
-                env
                 mkdir -p ~/.ssh
                 echo "${{ secrets.ARTIFACT_SSH_KEY }}" > ~/.ssh/id_ed25519
                 chmod 600 ~/.ssh/id_ed25519
@@ -26,7 +25,7 @@ jobs:
                     -o StrictHostKeyChecking=no \
                     "$SSH_USER@$SSH_HOST" <<ENDSSH
                 cd "$APP_PATH/prod/kod-proteinfold"
+                git checkout master
                 git fetch --all
                 git reset --hard "$RELEASE_TAG"
-                git pull
                 ENDSSH
