@@ -5,6 +5,7 @@ source .env
 RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
 PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 DB_PATH=${DB_PATH:-/mnt/af2}
+BRANCH=${BRANCH:-master}
 
 set -x pipefail
 set -e
@@ -93,7 +94,7 @@ ARGS=""
 [[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
 [[ "<%= context.af_method %>" == "hf3"  ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db ${DB_PATH}"
 
-nextflow -c "/srv/scratch/sbf-pipelines/proteinfold/kod_proteinfold.config" run Australian-Structural-Biology-Computing/proteinfold -r dev -latest \
+nextflow -c "/srv/scratch/sbf-pipelines/proteinfold/kod_proteinfold.config" run Australian-Structural-Biology-Computing/proteinfold -r ${BRANCH} -latest \
     --input "${SAMPLESHEET}" \
     --outdir "${OUT_DIR}" \
     --mode "${PROT_MODE}" \
