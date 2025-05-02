@@ -99,6 +99,8 @@ nextflow -c "/srv/scratch/sbf-pipelines/proteinfold/kod_proteinfold.config" run 
     --outdir "${OUT_DIR}" \
     --mode "${PROT_MODE}" \
     --use_gpu \
+    --monochrome_logs \
+    -ansi-log false \
     ${ARGS} \
     -profile singularity,unsw_katana
 
