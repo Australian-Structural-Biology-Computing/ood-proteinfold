@@ -6,8 +6,9 @@ RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
 PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 DB_PATH=${DB_PATH:-/mnt/af2}
 BRANCH=${BRANCH:-master}
+REPOSITORY=${REPOSITORY:-Australian-Structural-Biology-Computing/proteinfold}
 
-set -x pipefail
+set -xo pipefail
 set -e
 
 # Load samplesheet-utils virtual environment
@@ -77,7 +78,7 @@ then
     for filename in *
     do
         echo "${filename}"
-        ln -s "$(pwd)/${filename}" $working_dir/fasta/$(echo ${filename} | sed --expression='s/\s/\-/g')
+        ln -s "$(pwd)/${filename}" "$working_dir/fasta/$(echo ${filename} | sed --expression='s/\s/\-/g')"
     done
 
     cd ${working_dir}
@@ -88,13 +89,13 @@ fi
 PROT_MODE=""
 ARGS=""
 
-[[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset <%= context.prot_mode %>"
+[[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset <%= context.prot_mode %> --full_dbs <%= context.full_dbs %>"
 [[ "<%= context.af_method %>" == "cf"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH}"
-[[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH}/esmfold_weights"
+[[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH}/esmfold_weights --esmfold_model_preset <%= context.prot_mode %>"
 [[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
 [[ "<%= context.af_method %>" == "hf3"  ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db ${DB_PATH}"
 
-nextflow -c "/srv/scratch/sbf-pipelines/proteinfold/kod_proteinfold.config" run Australian-Structural-Biology-Computing/proteinfold -r ${BRANCH} -latest \
+nextflow -c "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config" run ${REPOSITORY} -r ${BRANCH} -latest \
     --input "${SAMPLESHEET}" \
     --outdir "${OUT_DIR}" \
     --mode "${PROT_MODE}" \
@@ -103,5 +104,3 @@ nextflow -c "/srv/scratch/sbf-pipelines/proteinfold/kod_proteinfold.config" run 
     -ansi-log false \
     ${ARGS} \
     -profile singularity,unsw_katana
-
-exit 0

@@ -3,6 +3,8 @@ form:
     - run_name
     - af_method
     - prot_mode
+    - full_dbs
+    - citation_request
 
 cluster: "katana"
 
@@ -16,7 +18,7 @@ attributes:
             <h4>Acceptable inputs</h4>
             <ul>
                 <li>
-                    <b>Directory containing Fasta files:</b>
+                    <b>Directory containing Fasta file(s):</b>
                     <code>/srv/scratch/z3141592/my_experiment</code>
                 </li>
                 <li>
@@ -28,9 +30,9 @@ attributes:
         widget: "text_field"
         label: "Run Name"
         placeholder: "Enter your run name"
-        pattern: '^[A-Za-z0-9_]+$'
+        pattern: '^[A-Za-z0-9_\- ]+$'
         help: |
-            <a>Alphanumeric and "_" only</a>
+            <a>Alphanumeric and "_" or "-" only</a>
 
     af_method:
         widget: "select"
@@ -42,22 +44,32 @@ attributes:
                 <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower; optimised for atomic-level modeling - <a href="https://doi.org/10.1126/science.adl2528">Paper</a></li>
             </ul>
         options:
-            - ["Alphafold2", "af2", data-hide-mode: false]
-            - ["ESMFold", "esmf", data-hide-mode: true]
-            - ["RoseTTAFold-All-Atom", "rfaa", data-hide-mode: true]
+            - ["Alphafold2", "af2"]
+            - ["ESMFold", "esmf", data-hide-prot_mode: true]
+            - ["RoseTTAFold-All-Atom", "rfaa", data-hide-prot_mode: true]
         display: true
 
     prot_mode:
         widget: "select"
-        label: "Mode"
+        label: "Mode for AF2 or ESMFold"
+        help: "Monomer_ptm for AF2 only"
         options:
             - ["Monomer", "monomer"]
+            - ["Monomer_ptm", "monomer_ptm"]
             - ["Multimer", "multimer"]
+        display: true
+
+    full_dbs:
+        widget: "select"
+        label: "Full or Reduced DBs"
+        options:
+            - ["Full DBs", "true"]
+            - ["Reduced: Optimised for speed", "false"]
         display: true
 
     citation_request:
         widget: "text_area"
-        label: "facility_citation"
+        label: "Facility Citation"
         value: "doi.org/10.26190/4KQF-M552"
         help: |
             Please cite the above DOI and include this following acknowledgement in any publication that uses this resource:
