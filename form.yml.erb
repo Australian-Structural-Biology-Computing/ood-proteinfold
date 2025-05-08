@@ -32,7 +32,7 @@ attributes:
         placeholder: "Enter your run name"
         pattern: '^[A-Za-z0-9_\- ]+$'
         help: |
-            <a>Alphanumeric and "_" or "-" only</a>
+            <a>Alphanumeric and "_" only</a>
 
     af_method:
         widget: "select"
@@ -45,14 +45,18 @@ attributes:
             </ul>
         options:
             - ["Alphafold2", "af2"]
-            - ["ESMFold", "esmf", data-hide-prot_mode: true]
+            - ["ESMFold", "esmf", data-hide-full_dbs: true]
             - ["RoseTTAFold-All-Atom", "rfaa", data-hide-prot_mode: true]
         display: true
 
     prot_mode:
         widget: "select"
-        label: "Mode for AF2 or ESMFold"
-        help: "Monomer_ptm for AF2 only"
+        label: "Mode"
+        help: |
+            <ul>
+                <li>Only applies to AlphaFold2.3 and ESMFold</li>
+                <li>Monomer_ptm for AlphaFold2.3 only</li>
+            </ul>
         options:
             - ["Monomer", "monomer"]
             - ["Monomer_ptm", "monomer_ptm"]
@@ -61,16 +65,23 @@ attributes:
 
     full_dbs:
         widget: "select"
-        label: "Full or Reduced DBs"
+        label: "MSA Search Database"
         options:
-            - ["Full DBs", "true"]
-            - ["Reduced: Optimised for speed", "false"]
+            - ["Full", "true"]
+            - ["Reduced", "false"]
         display: true
+        help: |
+            <ul>
+                <li><b>Full</b> High Accuracy, Slower</li>
+                <li><b>Reduced</b> Optimised for speed</li>
+            </ul>
 
     citation_request:
         label: "Facility Citation"
-        value: "doi.org/10.26190/4KQF-M552"
+        class: "d-none"
         help: |
+            <b>doi.org/10.26190/4KQF-M552</b>
+
             Please cite the above DOI and include this following acknowledgement in any publication that uses this resource:
             <i>"The authors acknowledge use of facilities in the Structural Biology Facility within the Mark Wainwright Analytical Centre – UNSW,</i>
             <i>funded in part by the Australian Research Council Linkage Infrastructure, Equipment and Facilities Grant: ARC LIEF <b>190100165</b>"</i>
