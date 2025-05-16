@@ -10,7 +10,6 @@ set -e
 
 # Set dependency version numbers
 VERSION_SAMPLESHEET_UTILS="1.1.2"
-VERISON_PROTEINFOLD_HASH="fd01013a6109300c917e12356bce0d2297ed1a0e"
 
 # Load samplesheet-utils virtual environment 
 source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
@@ -40,18 +39,6 @@ function check_depend_version() {
 				echo "VERSION MISMATCH! samplesheet-utils does not match expected version. installed version is ${LOCAL_SAMPLESHEET_VERSION}, expected ${VERSION_SAMPLESHEET_UTILS}"
 				exit 1
 			fi
-
-			# Check pipeline version
-			#$tmp_prev_wd=$(pwd)
-			#cd "${PROJECT_ROOT}/${RUN_ENVIRONMENT}"
-			#LOCAL_PROTEINFOLD_HASH="git rev-parse HEAD"	
-			#if [ "${LOCAL_PROTEINFOLD_VERSION}" != "${VERISON_PROTEINFOLD_HASH}"]; then
-			#	echo "VERSION MISMATCH! proteinfold does not match expected version. installed version is ${LOCAL_PROTEINFOLD_VERSION}, expected ${VERSION_PROTEINFOLD_HASH}"
-			#	exit 1
-			#fi
-
-			## Go back to previous working directory
-			#cd ${tmp_prev_wd}
 	fi
 }
 
