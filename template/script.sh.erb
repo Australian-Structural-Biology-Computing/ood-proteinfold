@@ -4,7 +4,7 @@ source .env
 # Set defaults to prod if .env is not found
 RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
 PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
-DB_PATH=${DB_PATH:-/mnt/af2}
+DB_PATH=${DB_PATH:-/srv/scratch/sbf-pipelines/proteinfold/dbs}
 BRANCH=${BRANCH:-master}
 REPOSITORY=${REPOSITORY:-Australian-Structural-Biology-Computing/proteinfold}
 
@@ -54,7 +54,6 @@ SAMPLESHEET=""
 af_method="<%= context.af_method %>"
 OUTPUT_FORMAT=""
 case "${af_method}" in
-    rfaa) OUTPUT_FORMAT="--yaml-rfaa" ;;
     hf3)  OUTPUT_FORMAT="--json" ;;
     *)    OUTPUT_FORMAT="" ;;
 esac
@@ -96,7 +95,7 @@ else
     FULL_DB="false"
 fi
 
-[[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset <%= context.prot_mode %> --full_dbs ${FULL_DB}"
+[[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset <%= context.prot_mode %> --full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
 [[ "<%= context.af_method %>" == "cf"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH}"
 [[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH}/esmfold_weights --esmfold_model_preset <%= context.prot_mode %>"
 [[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
@@ -110,4 +109,4 @@ nextflow -c "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config" run ${RE
     --monochrome_logs \
     -ansi-log false \
     ${ARGS} \
-    -profile singularity,unsw_katana
+    -profile singularity
