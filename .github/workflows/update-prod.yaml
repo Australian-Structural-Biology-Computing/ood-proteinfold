@@ -1,0 +1,26 @@
+name: Deploy new release to production
+on:
+    release:
+        types: [published]
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        env:
+          SSH_HOST: ${{ secrets.HOST }}
+          SSH_USER: ${{ secrets.USER }}
+          APP_PATH: ${{ secrets.APP_PATH }}
+        steps:
+          - uses: actions/checkout@v4.2.2
+          - uses: webfactory/ssh-agent@v0.9.1
+            with:
+              ssh-private-key: ${{ secrets.SSH_KEY}}
+
+          - name: Add host to known_hosts
+            run: |
+              mkdir -p ~/.ssh
+              ssh-keyscan -H -p 22 "${SSH_HOST}" >> ~/.ssh/known_hosts
+
+          - name: Deploy new code
+            run: |
+              rsync -avz --delete ./ "${SSH_USER}@${SSH_HOST}:${APP_PATH}/prod/kod-proteinfold"

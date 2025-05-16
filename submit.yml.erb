@@ -2,11 +2,14 @@ batch_connect:
     template: "basic"
     queue_name: "submission"
     script_file: "/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh"
+    conn_params:
+        - run_dir
+        - user
 
 script:
     native:
         - "-A kod_proteinfold"
-        - "-l select=1:ngpus=1:ncpus=2:mem=2gb"
+        - "-l select=1:ncpus=2:mem=2gb"
         - "-l walltime=48:00:00"
         - "-N kod_proteinfold"
     email:

@@ -3,8 +3,8 @@ form:
     - run_name
     - af_method
     - prot_mode
-    - email
-
+    - full_dbs
+    - citation_request
 
 cluster: "katana"
 
@@ -18,7 +18,7 @@ attributes:
             <h4>Acceptable inputs</h4>
             <ul>
                 <li>
-                    <b>Directory containing Fasta files:</b>
+                    <b>Directory containing Fasta file(s):</b>
                     <code>/srv/scratch/z3141592/my_experiment</code>
                 </li>
                 <li>
@@ -30,6 +30,9 @@ attributes:
         widget: "text_field"
         label: "Run Name"
         placeholder: "Enter your run name"
+        pattern: '^[A-Za-z0-9_\- ]+$'
+        help: |
+            <a>Alphanumeric and "_" only</a>
 
     af_method:
         widget: "select"
@@ -41,27 +44,44 @@ attributes:
                 <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower; optimised for atomic-level modeling - <a href="https://doi.org/10.1126/science.adl2528">Paper</a></li>
             </ul>
         options:
-            - ["Alphafold2", "af2", data-hide-mode: false]
-            - ["ESMFold", "esmf", data-hide-mode: true]
-            - ["RoseTTAFold-All-Atom", "rfaa", data-hide-mode: true]
+            - ["Alphafold2", "af2"]
+            - ["ESMFold", "esmf", data-hide-full_dbs: true]
+            - ["RoseTTAFold-All-Atom", "rfaa", data-hide-prot_mode: true]
+        display: true
 
     prot_mode:
         widget: "select"
         label: "Mode"
+        help: |
+            <ul>
+                <li>Only applies to AlphaFold2.3 and ESMFold</li>
+                <li>Monomer_ptm for AlphaFold2.3 only</li>
+            </ul>
         options:
             - ["Monomer", "monomer"]
+            - ["Monomer_ptm", "monomer_ptm"]
             - ["Multimer", "multimer"]
+        display: true
 
-    email:
-        widget: "text_field"
-        label: "Email Address"
-        placeholder: "Enter your email (optional)"
+    full_dbs:
+        widget: "select"
+        label: "MSA Search Database"
+        options:
+            - ["Reduced", "reduced"]
+            - ["Full", "full"]
+        display: true
+        help: |
+            <ul>
+                <li><b>Full</b> High Accuracy, Slower</li>
+                <li><b>Reduced</b> Optimised for speed</li>
+            </ul>
 
     citation_request:
-        widget: "text_area"
-        label: "facility_citation"
-        value: "doi.org/10.26190/4KQF-M552"
+        label: "Facility Citation"
+        class: "d-none"
         help: |
+            <b>doi.org/10.26190/4KQF-M552</b>
+
             Please cite the above DOI and include this following acknowledgement in any publication that uses this resource:
             <i>"The authors acknowledge use of facilities in the Structural Biology Facility within the Mark Wainwright Analytical Centre – UNSW,</i>
             <i>funded in part by the Australian Research Council Linkage Infrastructure, Equipment and Facilities Grant: ARC LIEF <b>190100165</b>"</i>
