@@ -11,7 +11,7 @@ script:
         - "-A kod_proteinfold"
         - "-l select=1:ncpus=2:mem=2gb"
         - "-l walltime=48:00:00"
-        - "-N kod_proteinfold"
+        - "-N <%= (run_name || 'kod_proteinfold').gsub(' ', '_') %>"
     email:
         - "<%= ENV['USER'] %>@ad.unsw.edu.au"
     email_on_terminated: "<%= email_on_terminated %>"
