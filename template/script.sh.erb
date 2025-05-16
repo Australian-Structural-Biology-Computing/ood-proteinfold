@@ -11,7 +11,8 @@ REPOSITORY=${REPOSITORY:-Australian-Structural-Biology-Computing/proteinfold}
 set -xo pipefail
 set -e
 
-# Load samplesheet-utils virtual environment
+# Set dependency version numbers
+VERSION_SAMPLESHEET_UTILS="1.1.2"
 source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
 
 export NXF_WORK="/srv/scratch/${USER}/.proteinfold/work"
@@ -29,6 +30,20 @@ export NXF_SINGULARITY_LIBRARYDIR="${NXF_SINGULARITY_LIBRARYDIR:-/srv/scratch/sb
 export PROTEINFOLD_VERSION="1.1.1"
 
 mkdir -p "${NXF_WORK}"
+
+function check_depend_version() {
+	# Ensure that script is running in prod
+	if [ "${RUN_ENVIRONMENT}" == "prod" ]; then
+			# Check samplesheet utils
+			LOCAL_SAMPLESHEET_VERSION=$(pip3 list 2>&1 | grep samplesheetutils | cut -d' ' -f2)
+			if [ "${LOCAL_SAMPLESHEET_VERSION}" != "${VERSION_SAMPLESHEET_UTILS}"]; then
+				echo "VERSION MISMATCH! samplesheet-utils does not match expected version. installed version is ${LOCAL_SAMPLESHEET_VERSION}, expected ${VERSION_SAMPLESHEET_UTILS}"
+				exit 1
+			fi
+	fi
+}
+
+check_depend_version
 
 module purge
 module load java/21 nextflow/24
@@ -101,6 +116,7 @@ fi
 [[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH}/esmfold_weights --esmfold_model_preset <%= context.prot_mode %>"
 [[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
 [[ "<%= context.af_method %>" == "hf3"  ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db ${DB_PATH}"
+
 
 nextflow -c "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config" run ${REPOSITORY} -r ${BRANCH} -latest \
     --input "${SAMPLESHEET}" \
