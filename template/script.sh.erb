@@ -1,5 +1,8 @@
 #!/bin/bash
 
+exec > >(tee -a live_log.log)
+exec 2>&1
+
 source .env
 # Set defaults to prod if .env is not found
 RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
@@ -9,13 +12,26 @@ BRANCH=${BRANCH:-master}
 REPOSITORY=${REPOSITORY:-Australian-Structural-Biology-Computing/proteinfold}
 
 set -xo pipefail
-set -e
+set -eE
+
+# Define debug directory at the top
+NOW=$(date +%Y%m%d_%H%M%S)
+RUNNAME="${USER}_${NOW}"
+DEBUGDIR="/srv/scratch/sbf/debug/${RUNNAME}"
+
+trap "collect_debug_files" ERR
+
+function collect_debug_files() {
+    echo "Error occurred, copying debug files to ${DEBUGDIR}"
+    mkdir -p "$DEBUGDIR"
+    rsync -a . "${NXF_WORK}" "$DEBUGDIR/"
+}
 
 # Set dependency version numbers
 VERSION_SAMPLESHEET_UTILS="1.1.2"
 source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
 
-export NXF_WORK="/srv/scratch/${USER}/.proteinfold/work"
+export NXF_WORK="/srv/scratch/${USER}/.proteinfold/work/${RUNNAME}"
 
 # Native environment cacheDir used for caching blobs during image pulls
 export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
@@ -115,7 +131,6 @@ fi
 [[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH}/esmfold_weights --esmfold_model_preset <%= context.prot_mode %>"
 [[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
 [[ "<%= context.af_method %>" == "hf3"  ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db ${DB_PATH}"
-
 
 nextflow -c "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config" run ${REPOSITORY} -r ${BRANCH} -latest \
     --input "${SAMPLESHEET}" \
