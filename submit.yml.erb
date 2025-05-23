@@ -1,7 +1,5 @@
 batch_connect:
     template: "basic"
-    queue_name: "submission"
-    script_file: "/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh"
     conn_params:
         - run_dir
         - user
@@ -11,7 +9,7 @@ script:
         - "-A kod_proteinfold"
         - "-l select=1:ncpus=2:mem=2gb"
         - "-l walltime=48:00:00"
-        - "-N <%= (run_name || 'kod_proteinfold').gsub(' ', '_') %>"
+        - "-N <%= (run_name || 'ood_proteinfold').gsub(' ', '_') %>"
     email:
         - "<%= ENV['USER'] %>@ad.unsw.edu.au"
     email_on_terminated: "<%= email_on_terminated %>"
