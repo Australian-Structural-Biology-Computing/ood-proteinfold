@@ -27,7 +27,7 @@ function collect_debug_files() {
     mkdir -p "$DEBUGDIR"
     rsync -a . "${NXF_WORK}" "$DEBUGDIR/"
     find "$DEBUGDIR" -type d -exec chmod 2770 {} +
-    chmod g+rw "$DEBUGDIR" -R
+    find "$DEBUGDIR" -type f -exec chmod 660 {} +
     chgrp "$DEBUGGROUP" -R "$DEBUGDIR"
 }
 
