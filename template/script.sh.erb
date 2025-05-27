@@ -10,6 +10,7 @@ PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 DB_PATH=${DB_PATH:-/srv/scratch/sbf-pipelines/proteinfold/dbs}
 BRANCH=${BRANCH:-master}
 REPOSITORY=${REPOSITORY:-Australian-Structural-Biology-Computing/proteinfold}
+DEBUGGROUP=${DEBUGGROUP:-sbf-pipelines}
 
 set -xo pipefail
 set -eE
@@ -25,6 +26,9 @@ function collect_debug_files() {
     echo "Error occurred, copying debug files to ${DEBUGDIR}"
     mkdir -p "$DEBUGDIR"
     rsync -a . "${NXF_WORK}" "$DEBUGDIR/"
+    find "$DEBUGDIR" -type d -exec chmod 2770 {} +
+    find "$DEBUGDIR" -type f -exec chmod 660 {} +
+    chgrp "$DEBUGGROUP" -R "$DEBUGDIR"
 }
 
 # Set dependency version numbers
@@ -52,7 +56,7 @@ function check_depend_version() {
 	if [ "${RUN_ENVIRONMENT}" == "prod" ]; then
 			# Check samplesheet utils
 			LOCAL_SAMPLESHEET_VERSION=$(pip3 list 2>&1 | grep samplesheetutils | cut -d' ' -f2)
-			if [ "${LOCAL_SAMPLESHEET_VERSION}" != "${VERSION_SAMPLESHEET_UTILS}"]; then
+            if [ "${LOCAL_SAMPLESHEET_VERSION}" != "${VERSION_SAMPLESHEET_UTILS}" ]; then
 				echo "VERSION MISMATCH! samplesheet-utils does not match expected version. installed version is ${LOCAL_SAMPLESHEET_VERSION}, expected ${VERSION_SAMPLESHEET_UTILS}"
 				exit 1
 			fi
