@@ -4,6 +4,7 @@ form:
     - af_method
     - prot_mode
     - full_dbs
+    - msa_server
     - citation_request
 
 cluster: "katana"
@@ -80,6 +81,19 @@ attributes:
             <ul>
                 <li><b>Full</b> High Accuracy, Slower</li>
                 <li><b>Reduced</b> Optimised for speed</li>
+            </ul>
+
+    msa_server:
+        widget: "select"
+        label: "MSA Server"
+        options:
+            - ["Local", "local"]
+            - ["Webserver", "webserver"]
+        display: true
+        help: |
+            <ul>
+                <li><b>Local</b> Use local compute resources</li>
+                <li><b>Webserver</b> Use remote webserver</li>
             </ul>
 
     citation_request:

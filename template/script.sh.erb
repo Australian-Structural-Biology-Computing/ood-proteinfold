@@ -130,9 +130,16 @@ else
     FULL_DB="false"
 fi
 
-[[ "<%= context.af_method %>" == "bz1"  ]] && PROT_MODE="boltz" && ARGS="--boltz_db ${DB_PATH}/boltz --colabfold_db ${DB_PATH} --boltz_use_msa_server"
+if [ "<%= context.msa_server %>" == "local" ];
+then
+    BOLTZ_MSA_SERVER="false"
+else
+    BOLTZ_MSA_SERVER="true"
+fi
+
+[[ "<%= context.af_method %>" == "bz1"  ]] && PROT_MODE="boltz" && ARGS="--boltz_db ${DB_PATH}/boltz --colabfold_db ${DB_PATH} --boltz_use_msa_server ${BOLTZ_MSA_SERVER} --colabfold_server <%= context.msa_server %>"
 [[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset <%= context.prot_mode %> --full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
-[[ "<%= context.af_method %>" == "cf"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH}"
+[[ "<%= context.af_method %>" == "cf"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH} --colabfold_server <%= context.msa_server %>"
 [[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH}/esmfold_weights --esmfold_model_preset <%= context.prot_mode %>"
 [[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
 [[ "<%= context.af_method %>" == "hf3"  ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db ${DB_PATH}"
@@ -145,4 +152,4 @@ nextflow -c "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config" run ${RE
     --monochrome_logs \
     -ansi-log false \
     ${ARGS} \
-    -profile singularity
+    -profile apptainer
