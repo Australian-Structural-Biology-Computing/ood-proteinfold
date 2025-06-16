@@ -18,7 +18,7 @@ set -eE
 # Define debug directory at the top
 NOW=$(date +%Y%m%d_%H%M%S)
 RUNNAME="${USER}_${NOW}"
-DEBUGDIR="/srv/scratch/sbf/debug/${RUNNAME}"
+DEBUGDIR=${DEBUGDIR:-"/srv/scratch/sbf/debug/${RUNNAME}"}
 
 trap "collect_debug_files" ERR
 
@@ -35,7 +35,7 @@ function collect_debug_files() {
 VERSION_SAMPLESHEET_UTILS="1.1.2"
 source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
 
-export NXF_WORK="/srv/scratch/${USER}/.proteinfold/work/${RUNNAME}"
+export NXF_WORK="${NXF_WORK:-/srv/scratch/${USER}/.proteinfold/work/${RUNNAME}}"
 
 # Native environment cacheDir used for caching blobs during image pulls
 export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
@@ -73,7 +73,7 @@ user_input="<%= context.samplesheet %>"
 echo "${user_input}" >> $HOME/debug.txt
 
 RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
-OUT_DIR="/srv/scratch/${USER}/proteinfold_output/${RUN_DIR}"
+OUT_DIR=${OUT_DIR:-"/srv/scratch/${USER}/proteinfold_output/${RUN_DIR}"}
 mkdir -p "${OUT_DIR}"
 
 MODE=""
@@ -144,4 +144,4 @@ nextflow -c "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config" run ${RE
     --monochrome_logs \
     -ansi-log false \
     ${ARGS} \
-    -profile singularity
+    -profile apptainer
