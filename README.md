@@ -45,7 +45,7 @@ To deploy ProteinFold on your own Open OnDemand instance:
 # Base output directory for all runs (job-specific OUT_DIR set at runtime)
 BASE_OUT_DIR=/srv/scratch/${USER}/proteinfold_output
 
-# Environment (prod, dev, etc.)
+# Environment name (e.g., prod, dev)
 RUN_ENVIRONMENT=prod
 
 # Project root: location of Nextflow configs and samplesheet-utils environment
@@ -91,7 +91,7 @@ source ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate
 pip install samplesheet-utils==1.1.2
 ```
 
-Update the path in `.env` if your environment is elsewhere.
+Update the paths in `.env` if your environment is elsewhere.
 
 ## Citation
 
