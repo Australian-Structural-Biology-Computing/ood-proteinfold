@@ -33,11 +33,11 @@ To deploy ProteinFold on your own Open OnDemand instance:
    git clone https://github.com/Australian-Structural-Biology-Computing/ood-proteinfold.git /var/www/ood/apps/sys/kod-proteinfold
    ```
 
-2. **Edit files to match instituational settings**:
+2. **Edit files to match institutional settings**:
    - Update `submit.yml.erb` with your facility-specific settings.
    - Change the cluster in `form.yml.erb` to match your HPC.
-   - Create `kod_proteinfold-${RUN_ENVIRONMENT}.config` files for proteinfold specific nextflow configurations. Or remove this line from `script.sh.erb` if not needed.
-   - Create a `template/.env` file to change any of these desired parameters from default:
+   - Create `kod_proteinfold-${RUN_ENVIRONMENT}.config` files for proteinfold-specific nextflow configurations. Or remove this line from `script.sh.erb` if not needed.
+   - Create a `template/.env` file to change any of these default parameters:
 
 ```
 # Example .env for ood-proteinfold
@@ -69,11 +69,11 @@ BASE_DEBUGDIR=/srv/scratch/sbf/debug
 # Nextflow work directory base (job-specific NXF_WORK set at runtime)
 BASE_NXF_WORK=/srv/scratch/${USER}/.proteinfold/work
 
-# Apptainer/Singularity blob cache directories (set here or via institutional Nextflow config) e.g. https://github.com/nf-core/configs/blob/master/conf/unsw_katana.config
+# Apptainer/Singularity blob cache directories (set here or via your institutional Nextflow config, e.g. https://github.com/Australian-Structural-Biology-Computing/unsw_katana)
 # APPTAINER_CACHEDIR=/srv/scratch/${USER}/.images
 # SINGULARITY_CACHEDIR=/srv/scratch/${USER}/.images
 
-# Nextflow Apptainer/Singularity image cache/library directories (set here or via institutional Nextflow config) e.g. https://github.com/nf-core/configs/blob/master/conf/pipeline/proteinfold/unsw_katana.config
+# Nextflow Apptainer/Singularity image cache/library directories (set here or via institutional Nextflow config, e.g. https://github.com/nf-core/configs/blob/master/conf/pipeline/proteinfold/unsw_katana.config)
 # NXF_APPTAINER_CACHEDIR=/srv/scratch/${USER}/.images
 # NXF_SINGULARITY_CACHEDIR=/srv/scratch/${USER}/.images
 # NXF_APPTAINER_LIBRARYDIR=/srv/scratch/sbf-pipelines/proteinfold/singularity
