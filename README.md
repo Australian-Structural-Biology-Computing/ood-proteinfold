@@ -80,6 +80,19 @@ NXF_WORK=/srv/scratch/${USER}/.proteinfold/work/${RUNNAME}
 # NXF_SINGULARITY_LIBRARYDIR=/srv/scratch/sbf-pipelines/proteinfold/singularity
 ```
 
+### Python Environment for samplesheet-utils
+
+`samplesheet-utils` is required for generating and validating input samplesheets.
+You must create a Python virtual environment and install the correct version:
+
+```bash
+python3 -m venv ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv
+source ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate
+pip install samplesheet-utils==1.1.2
+```
+
+Update the path in `.env` if your environment is elsewhere.
+
 ## Citation
 
 Please cite [doi.org/10.26190/4KQF-M552](https://doi.org/10.26190/4KQF-M552) and acknowledge the Structural Biology Facility at UNSW in publications.
