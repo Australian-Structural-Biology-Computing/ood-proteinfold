@@ -92,6 +92,11 @@ create-samplesheet --version
 SAMPLESHEET=""
 
 af_method="<%= context.af_method %>"
+prot_mode="<%= context.prot_mode %>"
+# Remap prot_mode if af_method is esmf and prot_mode is monomer_ptm
+if [ "${af_method}" == "esmf" ] && [ "${prot_mode}" == "monomer_ptm" ]; then
+    prot_mode="monomer"
+fi
 OUTPUT_FORMAT=""
 case "${af_method}" in
     hf3)  OUTPUT_FORMAT="--json" ;;
@@ -100,7 +105,7 @@ esac
 
 if [ "${MODE}" == "MANUAL_INPUT" ];
 then
-    create-samplesheet --aa-string "${user_input}" --suffix "<%= context.prot_mode %>" ${OUTPUT_FORMAT}
+    create-samplesheet --aa-string "${user_input}" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
@@ -121,7 +126,7 @@ then
     done
 
     cd ${working_dir}
-    create-samplesheet --directory "./fasta" --suffix "<%= context.prot_mode %>" ${OUTPUT_FORMAT}
+    create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
@@ -135,9 +140,9 @@ else
     FULL_DB="false"
 fi
 
-[[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset <%= context.prot_mode %> --full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
+[[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
 [[ "<%= context.af_method %>" == "cf"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH}"
-[[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH}/esmfold_weights --esmfold_model_preset <%= context.prot_mode %>"
+[[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH}/esmfold_weights --esmfold_model_preset ${prot_mode}"
 [[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
 [[ "<%= context.af_method %>" == "hf3"  ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db ${DB_PATH}"
 
