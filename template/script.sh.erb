@@ -10,7 +10,7 @@ PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 DB_PATH=${DB_PATH:-/srv/scratch/sbf-pipelines/proteinfold/dbs}
 BRANCH=${BRANCH:-master}
 REPOSITORY=${REPOSITORY:-Australian-Structural-Biology-Computing/proteinfold}
-DEBUGGROUP=${DEBUGGROUP:-sbf-pipelines}
+DEBUGGROUP=${DEBUGGROUP:-sbf}
 
 set -xo pipefail
 set -eE
@@ -35,7 +35,7 @@ trap "collect_debug_files" ERR
 function collect_debug_files() {
     echo "Error occurred, copying debug files to ${DEBUGDIR}"
     mkdir -p "$DEBUGDIR"
-    rsync -a . "${NXF_WORK}" "$DEBUGDIR/"
+    rsync -a --no-perms --no-owner --no-group --max-size=50m . "${NXF_WORK}" "$DEBUGDIR/"
     find "$DEBUGDIR" -type d -exec chmod 2770 {} +
     find "$DEBUGDIR" -type f -exec chmod 660 {} +
     chgrp "$DEBUGGROUP" -R "$DEBUGDIR"
