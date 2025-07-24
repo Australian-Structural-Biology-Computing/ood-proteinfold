@@ -82,7 +82,7 @@ echo "${user_input}" >> $HOME/debug.txt
 
 
 MODE=""
-[[ "${user_input}" =~ ^[A-Z\*\-\s]*$ ]] && MODE="MANUAL_INPUT"
+[[ "${user_input}" =~ ^[\ A-Z\*\-]*$ ]] && MODE="MANUAL_INPUT"
 [[ "${user_input}" =~ ^.*\.csv$ ]] && MODE="SAMPLESHEET_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
