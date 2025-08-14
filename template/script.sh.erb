@@ -10,7 +10,7 @@ PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 DB_PATH=${DB_PATH:-/srv/scratch/sbf-pipelines/proteinfold/dbs}
 BRANCH=${BRANCH:-master}
 REPOSITORY=${REPOSITORY:-Australian-Structural-Biology-Computing/proteinfold}
-DEBUGGROUP=${DEBUGGROUP:-sbf-pipelines}
+DEBUGGROUP=${DEBUGGROUP:-sbf}
 
 set -xo pipefail
 set -eE
@@ -18,24 +18,32 @@ set -eE
 # Define debug directory at the top
 NOW=$(date +%Y%m%d_%H%M%S)
 RUNNAME="${USER}_${NOW}"
-DEBUGDIR="/srv/scratch/sbf/debug/${RUNNAME}"
+
+BASE_DEBUGDIR=${BASE_DEBUGDIR:-"/srv/scratch/sbf/debug"}
+DEBUGDIR="${BASE_DEBUGDIR}/${RUNNAME}"
+
+BASE_NXF_WORK=${BASE_NXF_WORK:-"/srv/scratch/${USER}/.proteinfold/work"}
+export NXF_WORK="${BASE_NXF_WORK}/${RUNNAME}"
+
+BASE_OUT_DIR=${BASE_OUT_DIR:-"/srv/scratch/${USER}/proteinfold_output"}
+RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
+OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
+mkdir -p "${OUT_DIR}"
 
 trap "collect_debug_files" ERR
 
 function collect_debug_files() {
     echo "Error occurred, copying debug files to ${DEBUGDIR}"
     mkdir -p "$DEBUGDIR"
-    rsync -a . "${NXF_WORK}" "$DEBUGDIR/"
+    rsync -a --no-perms --no-owner --no-group --max-size=50m . "${NXF_WORK}" "$DEBUGDIR/"
     find "$DEBUGDIR" -type d -exec chmod 2770 {} +
     find "$DEBUGDIR" -type f -exec chmod 660 {} +
     chgrp "$DEBUGGROUP" -R "$DEBUGDIR"
 }
 
 # Set dependency version numbers
-VERSION_SAMPLESHEET_UTILS="1.1.2"
+VERSION_SAMPLESHEET_UTILS="1.3.3"
 source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
-
-export NXF_WORK="/srv/scratch/${USER}/.proteinfold/work/${RUNNAME}"
 
 # Native environment cacheDir used for caching blobs during image pulls
 export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
@@ -72,12 +80,9 @@ module load java/21 nextflow/24
 user_input="<%= context.samplesheet %>"
 echo "${user_input}" >> $HOME/debug.txt
 
-RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
-OUT_DIR="/srv/scratch/${USER}/proteinfold_output/${RUN_DIR}"
-mkdir -p "${OUT_DIR}"
 
 MODE=""
-[[ "${user_input}" =~ ^[A-Z\*\-]*$ ]] && MODE="MANUAL_INPUT"
+[[ "${user_input}" =~ ^[\ A-Z\*\-]*$ ]] && MODE="MANUAL_INPUT"
 [[ "${user_input}" =~ ^.*\.csv$ ]] && MODE="SAMPLESHEET_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
@@ -87,6 +92,11 @@ create-samplesheet --version
 SAMPLESHEET=""
 
 af_method="<%= context.af_method %>"
+prot_mode="<%= context.prot_mode %>"
+# Remap prot_mode if af_method is esmf and prot_mode is monomer_ptm
+if [ "${af_method}" == "esmf" ] && [ "${prot_mode}" == "monomer_ptm" ]; then
+    prot_mode="monomer"
+fi
 OUTPUT_FORMAT=""
 case "${af_method}" in
     hf3)  OUTPUT_FORMAT="--json" ;;
@@ -95,7 +105,7 @@ esac
 
 if [ "${MODE}" == "MANUAL_INPUT" ];
 then
-    create-samplesheet --aa-string "${user_input}" --suffix "<%= context.prot_mode %>" ${OUTPUT_FORMAT}
+    create-samplesheet --aa-string "${user_input}" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
@@ -116,7 +126,7 @@ then
     done
 
     cd ${working_dir}
-    create-samplesheet --directory "./fasta" --suffix "<%= context.prot_mode %>" ${OUTPUT_FORMAT}
+    create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
@@ -138,9 +148,9 @@ else
 fi
 
 [[ "<%= context.af_method %>" == "bz1"  ]] && PROT_MODE="boltz" && ARGS="--boltz_db ${DB_PATH}/boltz --colabfold_db ${DB_PATH} --boltz_use_msa_server ${BOLTZ_MSA_SERVER} --colabfold_server <%= context.msa_server %>"
-[[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset <%= context.prot_mode %> --full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
+[[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
 [[ "<%= context.af_method %>" == "cf"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH} --colabfold_server <%= context.msa_server %>"
-[[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH}/esmfold_weights --esmfold_model_preset <%= context.prot_mode %>"
+[[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH}/esmfold_weights --esmfold_model_preset ${prot_mode}"
 [[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
 [[ "<%= context.af_method %>" == "hf3"  ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db ${DB_PATH}"
 
