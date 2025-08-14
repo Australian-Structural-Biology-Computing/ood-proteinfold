@@ -10,7 +10,7 @@ PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 DB_PATH=${DB_PATH:-/srv/scratch/sbf-pipelines/proteinfold/dbs}
 BRANCH=${BRANCH:-master}
 REPOSITORY=${REPOSITORY:-Australian-Structural-Biology-Computing/proteinfold}
-DEBUGGROUP=${DEBUGGROUP:-sbf-pipelines}
+DEBUGGROUP=${DEBUGGROUP:-sbf}
 
 set -xo pipefail
 set -eE
@@ -35,14 +35,14 @@ trap "collect_debug_files" ERR
 function collect_debug_files() {
     echo "Error occurred, copying debug files to ${DEBUGDIR}"
     mkdir -p "$DEBUGDIR"
-    rsync -a . "${NXF_WORK}" "$DEBUGDIR/"
+    rsync -a --no-perms --no-owner --no-group --max-size=50m . "${NXF_WORK}" "$DEBUGDIR/"
     find "$DEBUGDIR" -type d -exec chmod 2770 {} +
     find "$DEBUGDIR" -type f -exec chmod 660 {} +
     chgrp "$DEBUGGROUP" -R "$DEBUGDIR"
 }
 
 # Set dependency version numbers
-VERSION_SAMPLESHEET_UTILS="1.1.2"
+VERSION_SAMPLESHEET_UTILS="1.3.3"
 source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
 
 # Native environment cacheDir used for caching blobs during image pulls
@@ -74,7 +74,7 @@ function check_depend_version() {
 check_depend_version
 
 module purge
-module load java/21 nextflow/24
+module load java/21 nextflow/25
 
 # Check if the input is an amino acid sequence or a path
 user_input="<%= context.samplesheet %>"
@@ -82,7 +82,7 @@ echo "${user_input}" >> $HOME/debug.txt
 
 
 MODE=""
-[[ "${user_input}" =~ ^[A-Z\*\-]*$ ]] && MODE="MANUAL_INPUT"
+[[ "${user_input}" =~ ^[\ A-Z\*\-]*$ ]] && MODE="MANUAL_INPUT"
 [[ "${user_input}" =~ ^.*\.csv$ ]] && MODE="SAMPLESHEET_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
@@ -92,6 +92,11 @@ create-samplesheet --version
 SAMPLESHEET=""
 
 af_method="<%= context.af_method %>"
+prot_mode="<%= context.prot_mode %>"
+# Remap prot_mode if af_method is esmf and prot_mode is monomer_ptm
+if [ "${af_method}" == "esmf" ] && [ "${prot_mode}" == "monomer_ptm" ]; then
+    prot_mode="monomer"
+fi
 OUTPUT_FORMAT=""
 case "${af_method}" in
     hf3)  OUTPUT_FORMAT="--json" ;;
@@ -100,7 +105,7 @@ esac
 
 if [ "${MODE}" == "MANUAL_INPUT" ];
 then
-    create-samplesheet --aa-string "${user_input}" --suffix "<%= context.prot_mode %>" ${OUTPUT_FORMAT}
+    create-samplesheet --aa-string "${user_input}" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
@@ -121,7 +126,7 @@ then
     done
 
     cd ${working_dir}
-    create-samplesheet --directory "./fasta" --suffix "<%= context.prot_mode %>" ${OUTPUT_FORMAT}
+    create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
@@ -137,15 +142,15 @@ fi
 
 if [ "<%= context.msa_server %>" == "local" ];
 then
-    BOLTZ_MSA_SERVER="false"
+    USE_MSA_SERVER="false"
 else
-    BOLTZ_MSA_SERVER="true"
+    USE_MSA_SERVER="true"
 fi
 
-[[ "<%= context.af_method %>" == "bz1"  ]] && PROT_MODE="boltz" && ARGS="--boltz_db ${DB_PATH} --colabfold_db ${DB_PATH} --boltz_use_msa_server ${BOLTZ_MSA_SERVER} --colabfold_server <%= context.msa_server %>"
-[[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset <%= context.prot_mode %> --full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
-[[ "<%= context.af_method %>" == "cf"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH} --colabfold_server <%= context.msa_server %>"
-[[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH} --esmfold_model_preset <%= context.prot_mode %>"
+[[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
+[[ "<%= context.af_method %>" == "bz1"  ]] && PROT_MODE="boltz" && ARGS="--boltz_db ${DB_PATH} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER}"
+[[ "<%= context.af_method %>" == "cf"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH} --colabfold_server ${USE_MSA_SERVER}"
+[[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH} --esmfold_model_preset ${prot_mode}"
 [[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
 [[ "<%= context.af_method %>" == "hf3"  ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db ${DB_PATH}"
 
