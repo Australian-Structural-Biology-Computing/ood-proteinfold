@@ -93,8 +93,8 @@ SAMPLESHEET=""
 
 af_method="<%= context.af_method %>"
 prot_mode="<%= context.prot_mode %>"
-# Remap prot_mode if af_method is esmf and prot_mode is monomer_ptm
-if [ "${af_method}" == "esmf" ] && [ "${prot_mode}" == "monomer_ptm" ]; then
+# Remap prot_mode if af_method is esmfold and prot_mode is monomer_ptm
+if [ "${af_method}" == "esmfold" ] && [ "${prot_mode}" == "monomer_ptm" ]; then
     prot_mode="monomer"
 fi
 
@@ -111,7 +111,7 @@ fi
 
 OUTPUT_FORMAT=""
 case "${af_method}" in
-    hf3)  OUTPUT_FORMAT="--json" ;;
+    helixfold3)  OUTPUT_FORMAT="--json" ;;
     *)    OUTPUT_FORMAT="" ;;
 esac
 
@@ -159,12 +159,12 @@ else
     USE_MSA_SERVER="true"
 fi
 
-[[ "<%= context.af_method %>" == "af2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
-[[ "<%= context.af_method %>" == "bz1"  ]] && PROT_MODE="boltz" && ARGS="--boltz_db ${DB_PATH} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER}"
-[[ "<%= context.af_method %>" == "cf"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER} --colabfold_model_preset ${prot_mode}"
-[[ "<%= context.af_method %>" == "esmf" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH} --esmfold_model_preset ${prot_mode}"
-[[ "<%= context.af_method %>" == "rfaa" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
-[[ "<%= context.af_method %>" == "hf3"  ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db ${DB_PATH}"
+[[ "<%= context.af_method %>" == "alphafold2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
+[[ "<%= context.af_method %>" == "boltz"  ]] && PROT_MODE="boltz" && ARGS="--boltz_db ${DB_PATH} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER}"
+[[ "<%= context.af_method %>" == "colabfold"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER} --colabfold_model_preset ${prot_mode}"
+[[ "<%= context.af_method %>" == "esmfold" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH} --esmfold_model_preset ${prot_mode}"
+[[ "<%= context.af_method %>" == "rosettafold_all_atom" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
+[[ "<%= context.af_method %>" == "helixfold3"  ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db ${DB_PATH}"
 
 nextflow -c "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config" run ${REPOSITORY} -r ${BRANCH} -latest \
     --input "${SAMPLESHEET}" \
