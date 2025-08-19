@@ -9,7 +9,7 @@ batch_connect:
 script:
     native:
         - "-A kod_proteinfold"
-        - "-l select=1:ncpus=2:mem=2gb"
+        - "-l select=1:ncpus=2:mem=4gb"
         - "-l walltime=48:00:00"
         - "-N <%= (run_name || 'kod_proteinfold').gsub(' ', '_') %>"
     email:
