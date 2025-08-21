@@ -98,7 +98,7 @@ if [ "${af_method}" == "esmfold" ] && [ "${prot_mode}" == "monomer_ptm" ]; then
     prot_mode="monomer"
 fi
 
-if [ "${af_method}" == "cf" ] || [ "${af_method}" == "bz1" ]; then
+if [ "${af_method}" == "colabfold" ] || [ "${af_method}" == "boltz" ]; then
     case "${prot_mode}" in
         monomer|monomer_ptm)
             prot_mode="alphafold2_ptm"
