@@ -17,7 +17,7 @@ set -eE
 
 # Define debug directory at the top
 NOW=$(date +%Y%m%d_%H%M%S)
-RUNNAME="${USER}_${NOW}"
+RUNNAME="${NOW}_${USER}"
 
 BASE_DEBUGDIR=${BASE_DEBUGDIR:-"/srv/scratch/sbf/debug"}
 DEBUGDIR="${BASE_DEBUGDIR}/${RUNNAME}"
