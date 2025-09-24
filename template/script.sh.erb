@@ -159,7 +159,7 @@ else
     USE_MSA_SERVER="true"
 fi
 
-[[ "<%= context.af_method %>" == "alphafold2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
+[[ "<%= context.af_method %>" == "alphafold2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --alphafold2_full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
 [[ "<%= context.af_method %>" == "boltz"  ]] && PROT_MODE="boltz" && ARGS="--boltz_db ${DB_PATH} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER}"
 [[ "<%= context.af_method %>" == "colabfold"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER} --colabfold_model_preset ${prot_mode}"
 [[ "<%= context.af_method %>" == "esmfold" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH} --esmfold_model_preset ${prot_mode}"
