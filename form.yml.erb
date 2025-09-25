@@ -4,6 +4,7 @@ form:
     - af_method
     - prot_mode
     - full_dbs
+    - msa_server
     - citation_request
     - katana_citation
 
@@ -44,26 +45,24 @@ attributes:
         label: "Method"
         help: |
             <ul>
-                <li><b>AlphaFold2.3</b> High Accuracy, Slower - <a href="https://doi.org/10.1038/s41586-021-03819-2">Paper</a></li>
-                <li><b>ESMFold</b> Medium/Low Accuracy, Fastest (No Evolutionary Sequence Calculations) - <a href="https://doi.org/10.1126/science.ade2574">Paper</a></li>
-                <li><b>RoseTTAFold-All-Atom</b> High Accuracy, Slower; optimised for atomic-level modeling - <a href="https://doi.org/10.1126/science.adl2528">Paper</a></li>
+                <li><b>Boltz</b> High accuracy, Faster; Open AlphaFold3 method - <a href="https://doi.org/10.1101/2024.11.19.624167">Paper-1</a> <a href="https://doi.org/10.1101/2025.06.14.659707">Paper-2</a></li>
+                <li><b>AlphaFold2.3</b> High accuracy, Slower - <a href="https://doi.org/10.1038/s41586-021-03819-2">Paper</a></li>
+                <li><b>ESMFold</b> Medium/Low accuracy, Fastest; No evolutionary sequence calculations - <a href="https://doi.org/10.1126/science.ade2574">Paper</a></li>
+                <li><b>RoseTTAFold-All-Atom</b> Medium accuracy, Slower; Supports all atom modelling - <a href="https://doi.org/10.1126/science.adl2528">Paper</a></li>
             </ul>
         options:
-            - ["Alphafold2", "af2"]
-            - ["ESMFold", "esmf", data-hide-full_dbs: true]
-            - ["RoseTTAFold-All-Atom", "rfaa", data-hide-prot_mode: true]
+            - ["Boltz", "boltz", data-hide-prot_mode: true]
+            - ["Alphafold2", "alphafold2"]
+            - ["ESMFold", "esmfold", data-hide-full_dbs: true]
+            - ["RoseTTAFold-All-Atom", "rosettafold_all_atom", data-hide-prot_mode: true]
         display: true
 
     prot_mode:
         widget: "select"
         label: "Mode"
         help: |
-            <ul>
-                <li>Only applies to AlphaFold2.3 and ESMFold</li>
-                <li>Monomer_ptm for AlphaFold2.3 only</li>
-            </ul>
+            <b>Only applies to AlphaFold2.3 and ESMFold</b>
         options:
-            - ["Monomer", "monomer"]
             - ["Monomer_ptm", "monomer_ptm"]
             - ["Multimer", "multimer"]
         display: true
@@ -76,10 +75,23 @@ attributes:
             - ["Full", "full"]
         display: true
         help: |
+            <b>Only applies to AlphaFold2.3</b>
             <ul>
-                <li><b>Full</b> High Accuracy, Slower</li>
+                <li><b>Full</b> High accuracy, slower</li>
                 <li><b>Reduced</b> Optimised for speed</li>
             </ul>
+
+    msa_server: "local"
+        # widget: "select"
+        # label: "MSA Server"
+        # options:
+        #     - ["Local", "local"]
+        #     - ["Webserver", "webserver"]
+        # help: |
+        #     <ul>
+        #         <li><b>Local</b> Use local compute resources</li>
+        #         <li><b>Webserver</b> Use remote webserver</li>
+        #     </ul>
 
     citation_request:
         label: "Facility Citation"

@@ -4,4 +4,5 @@ category: Interactive Apps
 subcategory: Biology
 role: batch_connect
 description: "<img src=\"https://www.analytical.unsw.edu.au/sites/default/files/styles/feature_wide/public/facility_image/SBF_0.jpg\"
-  style=\"max-width: 200px\"/><br>\r\n<i>Computationally predict protein structures</i>\r\n"
+  style=\"max-width: 200px\"/><br>
+Web interface to run <a href=\"https://nf-co.re/proteinfold/dev\">nf-core/proteinfold</a> for computational protein structure prediction."
