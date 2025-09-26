@@ -42,7 +42,7 @@ function collect_debug_files() {
 }
 
 # Set dependency version numbers
-VERSION_SAMPLESHEET_UTILS="1.3.3"
+VERSION_SAMPLESHEET_UTILS="1.3.4"
 source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
 
 # Native environment cacheDir used for caching blobs during image pulls
@@ -55,7 +55,7 @@ export NXF_SINGULARITY_CACHEDIR="${NXF_SINGULARITY_CACHEDIR:-/srv/scratch/${USER
 export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
 export NXF_SINGULARITY_LIBRARYDIR="${NXF_SINGULARITY_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
 
-export PROTEINFOLD_VERSION="1.1.1"
+export PROTEINFOLD_VERSION="2.0.0dev"
 
 mkdir -p "${NXF_WORK}"
 
