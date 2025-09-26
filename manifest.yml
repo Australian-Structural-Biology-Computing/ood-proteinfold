@@ -5,4 +5,5 @@ subcategory: Biology
 role: batch_connect
 description: "<img src=\"https://www.analytical.unsw.edu.au/sites/default/files/styles/feature_wide/public/facility_image/SBF_0.jpg\"
   style=\"max-width: 200px\"/><br>
-Web interface to run <a href=\"https://nf-co.re/proteinfold/dev\">nf-core/proteinfold</a> for computational structure prediction."
+Web interface to run <a href=\"https://nf-co.re/proteinfold/dev\">nf-core/proteinfold</a> for computational structure prediction.
+Please refer to the <a href=\"https://unsw.sharepoint.com/:u:/s/StructuralBiologyFacility-UserDocumentation/EYBQBPXcXNhLhAgLvdQOvo4Bw9-nq_IoXTcPOYbP7s2woA?e=TJQP8ohttps://nf-co.re/proteinfold/dev\">User Guide</a>"
