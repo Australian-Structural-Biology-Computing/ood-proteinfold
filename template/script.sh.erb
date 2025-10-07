@@ -73,6 +73,7 @@ function check_depend_version() {
 
 check_depend_version
 
+# TODO: This can be handled by instituional nextflow .config allowing for better portability
 module purge
 module load java/21 nextflow/25
 
@@ -84,6 +85,7 @@ echo "${user_input}" >> $HOME/debug.txt
 MODE=""
 [[ "${user_input}" =~ ^[\ A-Z\*\-]*$ ]] && MODE="MANUAL_INPUT"
 [[ "${user_input}" =~ ^.*\.csv$ ]] && MODE="SAMPLESHEET_INPUT"
+[[ "${user_input}" =~ ^.*\.(fasta|fa|txt)$ ]] && MODE="FASTA_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
 echo "${MODE}"
@@ -93,6 +95,7 @@ SAMPLESHEET=""
 
 af_method="<%= context.af_method %>"
 prot_mode="<%= context.prot_mode %>"
+
 # Remap prot_mode if af_method is esmfold and prot_mode is monomer_ptm
 if [ "${af_method}" == "esmfold" ] && [ "${prot_mode}" == "monomer_ptm" ]; then
     prot_mode="monomer"
@@ -124,6 +127,14 @@ fi
 if [ "${MODE}" == "SAMPLESHEET_INPUT" ];
 then
     SAMPLESHEET="${user_input}"
+fi
+
+if [ "${MODE}" == "FASTA_INPUT" ];
+then
+    mkdir fasta
+    cp "${user_input}" ./fasta/
+    create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
+    SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
 
 if [ "${MODE}" == "DIRECTORY" ];
