@@ -73,7 +73,7 @@ function check_depend_version() {
 
 check_depend_version
 
-# TODO: This can be handled by instituional nextflow .config allowing for better portability
+# TODO: This can be handled by institutional nextflow .config allowing for better portability
 module purge
 module load java/21 nextflow/25
 
@@ -83,7 +83,7 @@ echo "${user_input}" >> $HOME/debug.txt
 
 
 MODE=""
-[[ "${user_input}" =~ ^[\ A-Z\*\-]*$ ]] && MODE="MANUAL_INPUT"
+[[ "${user_input}" =~ ^[\ A-Z:\*\-]*$ ]] && MODE="MANUAL_INPUT"
 [[ "${user_input}" =~ ^.*\.csv$ ]] && MODE="SAMPLESHEET_INPUT"
 [[ "${user_input}" =~ ^.*\.(fasta|fa|txt)$ ]] && MODE="FASTA_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
