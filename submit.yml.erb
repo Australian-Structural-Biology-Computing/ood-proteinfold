@@ -10,7 +10,7 @@ script:
     native:
     # ColabFold local DBs are only available locally on certain nodes. This is an example method for catching local ColabFold runs
      <% if (af_method == "colabfold" || af_method == "boltz") && msa_server == "local" %>
-         - "-l host=k099,ncpus=8,ngpus=1,mem=250gb"
+         - "-l select=1:mwacgpu200=gpu-mwac:ncpus=8:ngpus=1:mem=125gb"
          - "-l walltime=12:00:00"
          - "-N <%= (run_name || 'kod_proteinfold').gsub(' ', '_') %>"
      <% else %>
