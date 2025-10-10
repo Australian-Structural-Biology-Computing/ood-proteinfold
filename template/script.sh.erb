@@ -81,10 +81,31 @@ module load java/21 nextflow/25
 user_input="<%= context.samplesheet %>"
 echo "${user_input}" >> $HOME/debug.txt
 
+# Function to convert colon-delimited sequences to multi-FASTA format
+function convert_colon_delimited_to_fasta() {
+    local sequence="$1"
+    local output_file="$2"
+    if [[ "${sequence}" == *":"* ]]; then
+        echo "Conversion started..."
+        IFS=':' read -ra chains <<< "${sequence}"
+        > "${output_file}"
+        chain_labels="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        for i in "${!chains[@]}"; do
+            chain_label=${chain_labels:$i:1}
+            echo ">${chain_label}" >> "${output_file}"
+            echo "${chains[$i]}" >> "${output_file}"
+        done
+        echo "Converted ${#chains[@]} chains to ${output_file}"
+        return 0
+    else
+        return 1
+    fi
+}
+
 MODE=""
 [[ "${user_input}" =~ ^[\ A-Z:\*\-]*$ ]] && MODE="MANUAL_INPUT"
 [[ "${user_input}" =~ ^.*\.csv$ ]] && MODE="SAMPLESHEET_INPUT"
-[[ "${user_input}" =~ ^.*\.(fasta|fa|fas|faa|ffn|fna|frn|yaml|yml|json|txt|seq|aa|pep|protein)$ ]] && MODE="FASTA_INPUT"
+[[ "${user_input}" =~ ^\S+\.(fa(sta)?|y(a)?ml|json)$ ]] && MODE="FASTA_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
 echo "${MODE}"
@@ -167,8 +188,19 @@ esac
 
 if [ "${MODE}" == "MANUAL_INPUT" ];
 then
-    create-samplesheet --aa-string "${user_input}" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
-    SAMPLESHEET="$(pwd)/samplesheet.csv"
+    # Check if input contains colon-delimited sequences
+    if [[ "${user_input}" == *":"* ]]; then
+        echo "Detected colon-delimited sequence input, converting to multi-FASTA format..."
+        mkdir -p fasta
+        temp_fasta_file="./fasta/converted_multimer.fasta"
+        convert_colon_delimited_to_fasta "${user_input}" "${temp_fasta_file}"
+        create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
+        SAMPLESHEET="$(pwd)/samplesheet.csv"
+        echo "Successfully converted colon-delimited input to multi-FASTA and created samplesheet"
+    else
+        create-samplesheet --aa-string "${user_input}" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
+        SAMPLESHEET="$(pwd)/samplesheet.csv"
+    fi
 fi
 
 if [ "${MODE}" == "SAMPLESHEET_INPUT" ];
