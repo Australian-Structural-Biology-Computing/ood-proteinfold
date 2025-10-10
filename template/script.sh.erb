@@ -81,11 +81,10 @@ module load java/21 nextflow/25
 user_input="<%= context.samplesheet %>"
 echo "${user_input}" >> $HOME/debug.txt
 
-
 MODE=""
 [[ "${user_input}" =~ ^[\ A-Z:\*\-]*$ ]] && MODE="MANUAL_INPUT"
 [[ "${user_input}" =~ ^.*\.csv$ ]] && MODE="SAMPLESHEET_INPUT"
-[[ "${user_input}" =~ ^.*\.(fasta|fa|txt)$ ]] && MODE="FASTA_INPUT"
+[[ "${user_input}" =~ ^.*\.(fasta|fa|fas|faa|ffn|fna|frn|yaml|yml|json|txt|seq|aa|pep|protein)$ ]] && MODE="FASTA_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
 echo "${MODE}"
