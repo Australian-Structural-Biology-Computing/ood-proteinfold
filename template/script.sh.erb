@@ -105,7 +105,7 @@ function convert_colon_delimited_to_fasta() {
 MODE=""
 [[ "${user_input}" =~ ^[\ A-Z:\*\-]*$ ]] && MODE="MANUAL_INPUT"
 [[ "${user_input}" =~ ^.*\.csv$ ]] && MODE="SAMPLESHEET_INPUT"
-[[ "${user_input}" =~ ^\S+\.(fa(sta)?|y(a)?ml|json)$ ]] && MODE="FASTA_INPUT"
+[[ "${user_input}" =~ \.(fa(sta)?|y(a)?ml)$ ]] && MODE="FASTA_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
 echo "${MODE}"
