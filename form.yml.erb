@@ -1,5 +1,6 @@
 form:
     - samplesheet
+    - samplesheet_help
     - run_name
     - af_method
     - prot_mode
@@ -17,15 +18,14 @@ attributes:
         pattern: "*.csv^"
         placeholder: "path/to/file(s) or sequence 'NLYIQWLKDGGPSSGRPPPS'"
         required: true
+    samplesheet_help:
+        class: "d-none"
+        label: "Input Options"
         help: |
-            <b>Input options:</b>
-            <br>• <b>Directory:</b> <code>/srv/scratch/z3141592/my_experiment/</code>
+            • <b>Directory:</b> <code>/srv/scratch/z3141592/my_experiment/</code>
             <br>• <b>Single file:</b> <code>protein.fasta</code>, <code>protein.yaml</code>, or <code>samplesheet.csv</code>
             <br>• <b>Sequence:</b> <code>NLYIQWLKDGGPSSGRPPPS</code> or <code>NLYIQWLKDGGPSSGRPPPS:MKTVRQERLKSDHELFRTHT</code>
             <br>📖 <a href="https://unsw.sharepoint.com/sites/StructuralBiologyFacility-UserDocumentation/SitePages/ProteinFold-User-Guide.aspx?ga=1#preparing-your-inputs">User Guide</a> for advanced options.
-            <div style="padding: 0.375rem 0.75rem; background-color: #E2BEBE; border: 2px solid #761313; border-radius: var(--bs-border-radius); color: #761313; box-shadow: var(--bs-box-shadow-inset)">
-              <span><b>Warning!</b> Please ensure your input data (e.g., FASTA file or run name) does not contain sensitive data. Katana is <b>NOT</b> suitable for sensitive or highly sensitive data. You should use the UNSW Data Classification scheme to classify your data and learn about managing your research data by visiting the <a style="color: #5B5050" href="https://research.unsw.edu.au/research-data-management-hub">Research Data Management Hub.</a></span>
-            </div>
     run_name:
         widget: "text_field"
         label: "Run Name"
