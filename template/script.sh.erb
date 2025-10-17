@@ -164,6 +164,12 @@ SAMPLESHEET=""
 af_method="<%= context.af_method %>"
 prot_mode="<%= context.prot_mode %>"
 
+# Auto-set multimer mode for colon-delimited sequences
+if [[ "${user_input}" == *":"* ]]; then
+    echo "Colon-delimited sequence detected, automatically setting mode to multimer"
+    prot_mode="multimer"
+fi
+
 # Remap prot_mode if af_method is esmfold and prot_mode is monomer_ptm
 if [ "${af_method}" == "esmfold" ] && [ "${prot_mode}" == "monomer_ptm" ]; then
     prot_mode="monomer"
