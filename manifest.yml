@@ -3,9 +3,6 @@ name: Proteinfold
 category: Interactive Apps
 subcategory: Biology
 role: batch_connect
-description: "<img src=\"https://www.analytical.unsw.edu.au/sites/default/files/styles/feature_wide/public/facility_image/SBF_0.jpg\"
-  style=\"max-width: 200px\"/><br>
-Web interface to run <a href=\"https://nf-co.re/proteinfold/dev\">nf-core/proteinfold</a> for computational structure prediction.
-<div style=\"padding: 0.375rem 0.75rem; background-color: #E2BEBE; border: 2px solid #761313; border-radius: 0.25rem; color: #761313;\">
-  <span><b>Warning!</b> Please ensure your input data (e.g., FASTA file or run name) does not contain sensitive data. Katana is <b>NOT</b> suitable for sensitive or highly sensitive data. You should use the UNSW Data Classification scheme to classify your data and learn about managing your research data by visiting the <a style=\"color: #5B5050\" href=\"https://research.unsw.edu.au/research-data-management-hub\">Research Data Management Hub.</a></span>
-</div>"
+description: |
+  <img src="https://www.analytical.unsw.edu.au/sites/default/files/styles/feature_wide/public/facility_image/SBF_0.jpg" style="max-width: 200px"/><br>
+  Web interface to run <a href="https://nf-co.re/proteinfold/dev">nf-core/proteinfold</a> for computational structure prediction.
