@@ -73,10 +73,6 @@ function check_depend_version() {
 
 check_depend_version
 
-# TODO: This can be handled by institutional nextflow .config allowing for better portability
-module purge
-module load java/21 nextflow/25
-
 # Check if the input is an amino acid sequence or a path
 user_input="<%= context.samplesheet %>"
 echo "${user_input}" >> $HOME/debug.txt
@@ -240,18 +236,10 @@ fi
 
 PROT_MODE=""
 ARGS=""
-AF2_TEMPLATE_DATE="<%= context.alphafold2_max_template_date %>"
 COLABFOLD_RECYCLES="<%= context.colabfold_num_recycles %>"
 COLABFOLD_USE_TEMPLATES="<%= context.colabfold_use_templates %>"
 ESMFOLD_RECYCLES="<%= context.esmfold_num_recycles %>"
 BOLTZ_USE_POTENTIALS="<%= context.boltz_use_potentials %>"
-
-if [ -n "${AF2_TEMPLATE_DATE}" ]; then
-    if ! [[ "${AF2_TEMPLATE_DATE}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || ! date -d "${AF2_TEMPLATE_DATE}" "+%Y-%m-%d" >/dev/null 2>&1; then
-        echo "ERROR: AF2 Max Template Date must be a valid date in YYYY-MM-DD format."
-        exit 1
-    fi
-fi
 
 if [ "<%= context.full_dbs %>" == "full" ];
 then
@@ -270,9 +258,6 @@ fi
 if [ "<%= context.af_method %>" == "alphafold2" ]; then
     PROT_MODE="alphafold2"
     ARGS="${ARGS} --alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --alphafold2_full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
-    if [ -n "${AF2_TEMPLATE_DATE}" ]; then
-        ARGS="${ARGS} --alphafold2_max_template_date ${AF2_TEMPLATE_DATE}"
-    fi
 fi
 
 if [ "<%= context.af_method %>" == "boltz" ]; then

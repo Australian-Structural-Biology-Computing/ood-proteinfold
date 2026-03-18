@@ -6,7 +6,6 @@ form:
     - af_method
     - prot_mode
     - full_dbs
-    - alphafold2_max_template_date
     - colabfold_num_recycles
     - colabfold_use_templates
     - esmfold_num_recycles
@@ -59,11 +58,11 @@ attributes:
                 <li><b>RoseTTAFold-All-Atom</b> Medium accuracy, Slower; Supports all atom modelling - <a href="https://doi.org/10.1126/science.adl2528">Paper</a></li>
             </ul>
         options:
-            - ["Boltz", "boltz", data-hide-prot_mode: true, data-hide-full_dbs: true, data-hide-alphafold2_max_template_date: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_use_templates: true, data-hide-esmfold_num_recycles: true]
+            - ["Boltz", "boltz", data-hide-prot_mode: true, data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_use_templates: true, data-hide-esmfold_num_recycles: true]
             - ["AlphaFold2", "alphafold2", data-hide-colabfold_num_recycles: true, data-hide-colabfold_use_templates: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true]
-            - ["ColabFold", "colabfold", data-hide-full_dbs: true, data-hide-alphafold2_max_template_date: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true]
-            - ["ESMFold", "esmfold", data-hide-full_dbs: true, data-hide-alphafold2_max_template_date: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_use_templates: true, data-hide-boltz_use_potentials: true]
-            - ["RoseTTAFold-All-Atom", "rosettafold_all_atom", data-hide-prot_mode: true, data-hide-full_dbs: true, data-hide-alphafold2_max_template_date: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_use_templates: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true]
+            - ["ColabFold", "colabfold", data-hide-full_dbs: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true]
+            - ["ESMFold", "esmfold", data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_use_templates: true, data-hide-boltz_use_potentials: true]
+            - ["RoseTTAFold-All-Atom", "rosettafold_all_atom", data-hide-prot_mode: true, data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_use_templates: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true]
         display: true
 
     prot_mode:
@@ -84,20 +83,11 @@ attributes:
             - ["Full", "full"]
         display: true
         help: |
-            <b>Only applies to AlphaFold2.3</b>
+            <b>Search the full bfd database with hhblits (slower) or cluster representatives with JackHMMER (faster)</b>
             <ul>
                 <li><b>Full</b> High accuracy, slower</li>
                 <li><b>Reduced</b> Optimised for speed</li>
             </ul>
-
-    alphafold2_max_template_date:
-        widget: "text_field"
-        label: "AF2 Max Template Date"
-        value: "2038-01-19"
-        placeholder: "YYYY-MM-DD"
-        pattern: '^\d{4}-\d{2}-\d{2}$'
-        help: |
-            Restrict templates newer than this date for reproducibility or benchmarking.
 
     colabfold_num_recycles:
         widget: "number_field"
@@ -133,7 +123,7 @@ attributes:
             - ["Disabled", "false"]
             - ["Enabled", "true"]
         help: |
-            Enable inference-time potentials for Boltz-2 style runs.
+            Enable physics-based potentials to improve physical validity of predicted outputs (additional memory and runtime cost).
 
     msa_server: "local"
         # widget: "select"
