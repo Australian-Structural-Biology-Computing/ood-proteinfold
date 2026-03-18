@@ -240,6 +240,11 @@ fi
 
 PROT_MODE=""
 ARGS=""
+AF2_TEMPLATE_DATE="<%= context.alphafold2_max_template_date %>"
+COLABFOLD_RECYCLES="<%= context.colabfold_num_recycles %>"
+COLABFOLD_USE_TEMPLATES="<%= context.colabfold_use_templates %>"
+ESMFOLD_RECYCLES="<%= context.esmfold_num_recycles %>"
+BOLTZ_USE_POTENTIALS="<%= context.boltz_use_potentials %>"
 
 if [ "<%= context.full_dbs %>" == "full" ];
 then
@@ -255,12 +260,43 @@ else
     USE_MSA_SERVER="true"
 fi
 
-[[ "<%= context.af_method %>" == "alphafold2"  ]] && PROT_MODE="alphafold2" && ARGS="--alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --alphafold2_full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
-[[ "<%= context.af_method %>" == "boltz"  ]] && PROT_MODE="boltz" && ARGS="--boltz_db ${DB_PATH} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER}"
-[[ "<%= context.af_method %>" == "colabfold"   ]] && PROT_MODE="colabfold" && ARGS="--colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER} --colabfold_model_preset ${prot_mode}"
-[[ "<%= context.af_method %>" == "esmfold" ]] && PROT_MODE="esmfold" && ARGS="--esmfold_db ${DB_PATH} --esmfold_model_preset ${prot_mode}"
-[[ "<%= context.af_method %>" == "rosettafold_all_atom" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="--rosettafold_all_atom_db ${DB_PATH}"
-[[ "<%= context.af_method %>" == "helixfold3"  ]] && PROT_MODE="helixfold3" && ARGS="--helixfold3_db ${DB_PATH}"
+if [ "<%= context.af_method %>" == "alphafold2" ]; then
+    PROT_MODE="alphafold2"
+    ARGS="${ARGS} --alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --alphafold2_full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
+    if [ -n "${AF2_TEMPLATE_DATE}" ]; then
+        ARGS="${ARGS} --alphafold2_max_template_date ${AF2_TEMPLATE_DATE}"
+    fi
+fi
+
+if [ "<%= context.af_method %>" == "boltz" ]; then
+    PROT_MODE="boltz"
+    ARGS="${ARGS} --boltz_db ${DB_PATH} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER}"
+    if [ "${BOLTZ_USE_POTENTIALS}" == "true" ]; then
+        ARGS="${ARGS} --boltz_use_potentials true"
+    fi
+fi
+
+if [ "<%= context.af_method %>" == "colabfold" ]; then
+    PROT_MODE="colabfold"
+    ARGS="${ARGS} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER} --colabfold_model_preset ${prot_mode}"
+    if [ -n "${COLABFOLD_RECYCLES}" ]; then
+        ARGS="${ARGS} --colabfold_num_recycles ${COLABFOLD_RECYCLES}"
+    fi
+    if [ -n "${COLABFOLD_USE_TEMPLATES}" ]; then
+        ARGS="${ARGS} --colabfold_use_templates ${COLABFOLD_USE_TEMPLATES}"
+    fi
+fi
+
+if [ "<%= context.af_method %>" == "esmfold" ]; then
+    PROT_MODE="esmfold"
+    ARGS="${ARGS} --esmfold_db ${DB_PATH} --esmfold_model_preset ${prot_mode}"
+    if [ -n "${ESMFOLD_RECYCLES}" ]; then
+        ARGS="${ARGS} --esmfold_num_recycles ${ESMFOLD_RECYCLES}"
+    fi
+fi
+
+[[ "<%= context.af_method %>" == "rosettafold_all_atom" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="${ARGS} --rosettafold_all_atom_db ${DB_PATH}"
+[[ "<%= context.af_method %>" == "helixfold3"  ]] && PROT_MODE="helixfold3" && ARGS="${ARGS} --helixfold3_db ${DB_PATH}"
 
 nextflow -c "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config" run ${REPOSITORY} -r ${BRANCH} -latest \
     --input "${SAMPLESHEET}" \
