@@ -73,10 +73,6 @@ function check_depend_version() {
 
 check_depend_version
 
-# Check if the input is an amino acid sequence or a path
-user_input="<%= context.samplesheet %>"
-echo "${user_input}" >> $HOME/debug.txt
-
 # Function to convert colon-delimited sequences to multi-FASTA format
 function convert_colon_delimited_to_fasta() {
     local sequence="$1"
@@ -237,7 +233,6 @@ fi
 PROT_MODE=""
 ARGS=""
 COLABFOLD_RECYCLES="<%= context.colabfold_num_recycles %>"
-COLABFOLD_USE_TEMPLATES="<%= context.colabfold_use_templates %>"
 ESMFOLD_RECYCLES="<%= context.esmfold_num_recycles %>"
 BOLTZ_USE_POTENTIALS="<%= context.boltz_use_potentials %>"
 
@@ -273,9 +268,6 @@ if [ "<%= context.af_method %>" == "colabfold" ]; then
     ARGS="${ARGS} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER} --colabfold_model_preset ${prot_mode}"
     if [ -n "${COLABFOLD_RECYCLES}" ]; then
         ARGS="${ARGS} --colabfold_num_recycles ${COLABFOLD_RECYCLES}"
-    fi
-    if [ -n "${COLABFOLD_USE_TEMPLATES}" ]; then
-        ARGS="${ARGS} --colabfold_use_templates ${COLABFOLD_USE_TEMPLATES}"
     fi
 fi
 

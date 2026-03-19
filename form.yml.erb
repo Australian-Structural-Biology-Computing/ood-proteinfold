@@ -7,7 +7,6 @@ form:
     - prot_mode
     - full_dbs
     - colabfold_num_recycles
-    - colabfold_use_templates
     - esmfold_num_recycles
     - boltz_use_potentials
     - msa_server
@@ -58,18 +57,18 @@ attributes:
                 <li><b>RoseTTAFold-All-Atom</b> Medium accuracy, Slower; Supports all atom modelling - <a href="https://doi.org/10.1126/science.adl2528">Paper</a></li>
             </ul>
         options:
-            - ["Boltz", "boltz", data-hide-prot_mode: true, data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_use_templates: true, data-hide-esmfold_num_recycles: true]
-            - ["AlphaFold2", "alphafold2", data-hide-colabfold_num_recycles: true, data-hide-colabfold_use_templates: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true]
+            - ["Boltz", "boltz", data-hide-prot_mode: true, data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-esmfold_num_recycles: true]
+            - ["AlphaFold2", "alphafold2", data-hide-colabfold_num_recycles: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true]
             - ["ColabFold", "colabfold", data-hide-full_dbs: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true]
-            - ["ESMFold", "esmfold", data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_use_templates: true, data-hide-boltz_use_potentials: true]
-            - ["RoseTTAFold-All-Atom", "rosettafold_all_atom", data-hide-prot_mode: true, data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_use_templates: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true]
+            - ["ESMFold", "esmfold", data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-boltz_use_potentials: true]
+            - ["RoseTTAFold-All-Atom", "rosettafold_all_atom", data-hide-prot_mode: true, data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true]
         display: true
 
     prot_mode:
         widget: "select"
         label: "Mode"
         help: |
-            <b>Only applies to AlphaFold2.3, ColabFold, and ESMFold</b>
+            Please ensure that the mode matches your input data (for example, use monomer mode for monomer inputs).
         options:
             - ["Monomer_ptm", "monomer_ptm"]
             - ["Multimer", "multimer"]
@@ -83,7 +82,7 @@ attributes:
             - ["Full", "full"]
         display: true
         help: |
-            <b>Search the full bfd database with hhblits (slower) or cluster representatives with JackHMMER (faster)</b>
+            Search the full bfd database with hhblits (slower) or cluster representatives with JackHMMER (faster)
             <ul>
                 <li><b>Full</b> High accuracy, slower</li>
                 <li><b>Reduced</b> Optimised for speed</li>
@@ -97,15 +96,6 @@ attributes:
         max: 20
         help: |
             Higher values may improve quality but increase runtime.
-
-    colabfold_use_templates:
-        widget: "select"
-        label: "ColabFold Templates"
-        options:
-            - ["Disabled", "false"]
-            - ["Enabled", "true"]
-        help: |
-            Use PDB templates during prediction.
 
     esmfold_num_recycles:
         widget: "number_field"
