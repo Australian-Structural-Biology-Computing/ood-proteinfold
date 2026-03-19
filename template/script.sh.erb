@@ -73,6 +73,9 @@ function check_depend_version() {
 
 check_depend_version
 
+module purge
+module load java/21 nextflow/25
+
 # Function to convert colon-delimited sequences to multi-FASTA format
 function convert_colon_delimited_to_fasta() {
     local sequence="$1"
@@ -93,6 +96,9 @@ function convert_colon_delimited_to_fasta() {
         return 1
     fi
 }
+
+# Check if the input is an amino acid sequence or a path
+user_input="<%= context.samplesheet %>"
 
 MODE=""
 [[ "${user_input}" =~ ^[\ A-Z:\*\-]*$ ]] && MODE="MANUAL_INPUT"
