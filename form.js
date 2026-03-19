@@ -14,6 +14,9 @@
     return normalized === "" || normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
   };
 
+  const hasHideAttribute = (element) =>
+    Array.from(element.attributes).some((attribute) => attribute.name.startsWith("data-hide-"));
+
   const getOptionHideTargets = (option) => {
     const targets = new Set();
     if (!option) return targets;
@@ -81,7 +84,8 @@
     const elements = getFieldElements(fieldName);
     elements.forEach((element) => {
       const container = getFieldContainer(element);
-      const controls = [element, ...Array.from((container || element).querySelectorAll("input, select, textarea"))]
+      const scope = container || element;
+      const controls = [element, ...Array.from(scope.querySelectorAll("input, select, textarea"))]
         .filter((control, index, array) => array.indexOf(control) === index);
 
       if (container) {
@@ -92,14 +96,25 @@
       controls.forEach((control) => {
         if (hidden) {
           if (control.required) control.dataset.oodWasRequired = "1";
+          if (control.disabled && control.dataset.oodHiddenDisabled !== "1") {
+            control.dataset.oodWasDisabled = "1";
+          }
           control.required = false;
           control.disabled = true;
+          control.dataset.oodHiddenDisabled = "1";
         } else {
           if (control.dataset.oodWasRequired === "1") {
             control.required = true;
             delete control.dataset.oodWasRequired;
           }
-          control.disabled = false;
+
+          if (control.dataset.oodWasDisabled === "1") {
+            delete control.dataset.oodWasDisabled;
+          } else {
+            control.disabled = false;
+          }
+
+          delete control.dataset.oodHiddenDisabled;
         }
       });
     });
@@ -107,9 +122,7 @@
 
   const initDynamicHide = () => {
     const controllers = Array.from(document.querySelectorAll("select")).filter((select) =>
-      Array.from(select.options).some((option) =>
-        Array.from(option.attributes).some((attribute) => attribute.name.startsWith("data-hide-"))
-      )
+      Array.from(select.options).some(hasHideAttribute)
     );
 
     if (controllers.length === 0) return;
