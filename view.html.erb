@@ -1,9 +1,89 @@
+<%
+def file_url(base, path)
+  encoded_path = path.to_s.split("/").reject(&:empty?).map { |segment| ERB::Util.url_encode(segment) }.join("/")
+  "#{base}/#{encoded_path}"
+end
+
+def tail_text(path, max_bytes = 65536, max_lines = 120)
+  return nil unless File.file?(path)
+
+  File.open(path, "rb") do |file|
+    size = file.size
+    offset = [size - max_bytes, 0].max
+    file.seek(offset)
+    text = file.read.to_s
+
+    if offset > 0
+      newline_index = text.index("\n")
+      text = newline_index ? text[(newline_index + 1)..] : text
+    end
+
+    lines = text.lines
+    lines = lines.last(max_lines) if max_lines && max_lines > 0
+    lines.join
+  end
+end
+
+base_dir = (defined?(base_out_dir) && base_out_dir && !base_out_dir.to_s.empty?) ? base_out_dir.to_s : "/srv/scratch/#{user}/proteinfold_output"
+results_base = (defined?(results_url_base) && results_url_base && !results_url_base.to_s.empty?) ? results_url_base.to_s : "/pun/sys/dashboard/files/fs"
+run_output_dir = File.join(base_dir, run_dir.to_s)
+log_path = File.join(run_output_dir, "live_log.log")
+log_url = file_url(results_base, log_path)
+log_text = tail_text(log_path)
+%>
 <div class="ood-appkit markdown">
-  <div class="container">
+  <div class="container py-3">
     <div class="row">
-      <p>
-      Proteinfold is currently running.
-      </p>
+      <div class="col-12">
+        <p>
+          <a href="<%= log_url %>" target="_blank" rel="noopener">Open live log file</a>
+        </p>
+        <pre id="ood-live-log" style="min-height: 12rem !important; max-height: 16rem !important; overflow: auto !important; padding: 1rem !important; background: #0f172a !important; color: #f8fafc !important; border: 1px solid #334155 !important; border-radius: 0.5rem !important; white-space: pre-wrap !important; font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace !important;"><%= log_text && !log_text.empty? ? ERB::Util.html_escape(log_text) : "Waiting for log output..." %></pre>
+      </div>
     </div>
   </div>
 </div>
+<script>
+  (() => {
+    const logEl = document.getElementById("ood-live-log");
+    if (!logEl) return;
+
+    let previousText = logEl.textContent;
+    let refreshInFlight = false;
+    logEl.scrollTop = logEl.scrollHeight;
+
+    const refreshLog = async () => {
+      if (refreshInFlight || document.hidden) return;
+      refreshInFlight = true;
+
+      try {
+        const response = await fetch(`${window.location.pathname}${window.location.search ? `${window.location.search}&` : "?"}t=${Date.now()}`, {
+          cache: "no-store",
+          credentials: "same-origin"
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const html = await response.text();
+        const parsed = new DOMParser().parseFromString(html, "text/html");
+        const nextLogEl = parsed.getElementById("ood-live-log");
+        if (!nextLogEl) return;
+
+        const nextText = nextLogEl.textContent || "Waiting for log output...";
+        if (nextText !== previousText) {
+          previousText = nextText;
+          logEl.textContent = nextText;
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+      } catch (_error) {
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refreshLog();
+    });
+
+    window.setInterval(refreshLog, 5000);
+  })();
+</script>
