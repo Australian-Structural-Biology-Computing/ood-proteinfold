@@ -3,6 +3,8 @@ batch_connect:
     queue_name: "submission"
     script_file: "/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh"
     conn_params:
+        - base_out_dir
+        - results_url_base
         - run_dir
         - user
 

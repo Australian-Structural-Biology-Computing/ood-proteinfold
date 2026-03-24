@@ -1,8 +1,5 @@
 #!/bin/bash
 
-exec > >(tee -a live_log.log)
-exec 2>&1
-
 source .env
 # Set defaults to prod if .env is not found
 RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
@@ -29,6 +26,10 @@ BASE_OUT_DIR=${BASE_OUT_DIR:-"/srv/scratch/${USER}/proteinfold_output"}
 RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
 OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
 mkdir -p "${OUT_DIR}"
+
+LIVE_LOG="${OUT_DIR}/live_log.log"
+exec > >(tee -a "${LIVE_LOG}")
+exec 2>&1
 
 trap "collect_debug_files" ERR
 
