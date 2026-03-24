@@ -24,98 +24,66 @@ def tail_text(path, max_bytes = 65536, max_lines = 120)
   end
 end
 
-def sanitize_live_log(text)
-  return nil if text.nil?
-
-  ansi_pattern = /\e\[[0-9;?]*[ -\/]*[@-~]/
-  lines = text.gsub(ansi_pattern, "").split("\n")
-  cleaned = []
-  index = 0
-
-  while index < lines.length
-    line = lines[index]
-
-    if line.start_with?("WARN: cpus and memory directives are ignored when clusterOptions contains -l option")
-      index += 1
-      index += 1 while index < lines.length && lines[index].start_with?("tip:", "- ")
-      next
-    end
-
-    if line.start_with?("WARN: [PBSPRO] queue status cannot be fetched")
-      index += 1
-      index += 1 while index < lines.length && !lines[index].strip.empty?
-      index += 1 if index < lines.length && lines[index].strip.empty?
-      next
-    end
-
-    cleaned << line
-    index += 1
-  end
-
-  filtered = []
-  previous_status_block = nil
-  index = 0
-
-  while index < cleaned.length
-    line = cleaned[index]
-
-    if line =~ /^(executor >|\[[^\]]*\])/
-      block = []
-      while index < cleaned.length && cleaned[index] =~ /^(executor >|\[[^\]]*\])/
-        block << cleaned[index]
-        index += 1
-      end
-
-      if block != previous_status_block
-        filtered.concat(block)
-        previous_status_block = block
-      end
-
-      next
-    end
-
-    filtered << line
-    previous_status_block = nil unless line.strip.empty?
-    index += 1
-  end
-
-  compact = []
-  blank_streak = 0
-
-  filtered.each do |line|
-    if line.strip.empty?
-      blank_streak += 1
-      compact << "" if blank_streak == 1
-    else
-      blank_streak = 0
-      compact << line
-    end
-  end
-
-  compact.join("\n").strip
-end
-
 base_dir = (defined?(base_out_dir) && base_out_dir && !base_out_dir.to_s.empty?) ? base_out_dir.to_s : "/srv/scratch/#{user}/proteinfold_output"
 results_base = (defined?(results_url_base) && results_url_base && !results_url_base.to_s.empty?) ? results_url_base.to_s : "/pun/sys/dashboard/files/fs"
-log_dir = (defined?(session_output_dir) && session_output_dir && !session_output_dir.to_s.empty?) ? session_output_dir.to_s : File.join(base_dir, run_dir.to_s)
-log_path = File.join(log_dir, "live_log.log")
+run_output_dir = File.join(base_dir, run_dir.to_s)
+log_path = File.join(run_output_dir, "live_log.log")
 log_url = file_url(results_base, log_path)
-log_text = sanitize_live_log(tail_text(log_path))
+log_text = tail_text(log_path)
 %>
 <div class="ood-appkit markdown">
-  <div class="ood-live-log-card">
-    <div><b>Log</b>: <a target="_blank" rel="noopener" href="https://kod.restech.unsw.edu.au<%= log_url %>">live_log.log</a></div>
-    <pre class="ood-live-log" data-log-path="<%= ERB::Util.html_escape(log_path) %>" style="margin-top: 0.75rem !important; min-height: 9rem !important; max-height: 12rem !important; overflow: auto !important; padding: 1rem !important; background: #0f172a !important; color: #f8fafc !important; border: 1px solid #334155 !important; border-radius: 0.5rem !important; white-space: pre-wrap !important; font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace !important;"><%= log_text && !log_text.empty? ? ERB::Util.html_escape(log_text) : "Waiting for log output..." %></pre>
+  <div class="container py-3">
+    <div class="row">
+      <div class="col-12">
+        <p>
+          <a href="<%= log_url %>" target="_blank" rel="noopener">Open live log file</a>
+        </p>
+        <pre id="ood-live-log" style="min-height: 12rem !important; max-height: 16rem !important; overflow: auto !important; padding: 1rem !important; background: #0f172a !important; color: #f8fafc !important; border: 1px solid #334155 !important; border-radius: 0.5rem !important; white-space: pre-wrap !important; font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace !important;"><%= log_text && !log_text.empty? ? ERB::Util.html_escape(log_text) : "Waiting for log output..." %></pre>
+      </div>
+    </div>
   </div>
 </div>
 <script>
   (() => {
-    const scriptEl = document.currentScript;
-    const logEl = scriptEl ? scriptEl.previousElementSibling.querySelector(".ood-live-log") : null;
+    const logEl = document.getElementById("ood-live-log");
     if (!logEl) return;
 
-    window.requestAnimationFrame(() => {
-      logEl.scrollTop = logEl.scrollHeight;
+    let previousText = logEl.textContent;
+    let refreshInFlight = false;
+    logEl.scrollTop = logEl.scrollHeight;
+
+    const refreshLog = async () => {
+      if (refreshInFlight || document.hidden) return;
+      refreshInFlight = true;
+
+      try {
+        const response = await fetch(`${window.location.pathname}${window.location.search ? `${window.location.search}&` : "?"}t=${Date.now()}`, {
+          cache: "no-store",
+          credentials: "same-origin"
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const html = await response.text();
+        const parsed = new DOMParser().parseFromString(html, "text/html");
+        const nextLogEl = parsed.getElementById("ood-live-log");
+        if (!nextLogEl) return;
+
+        const nextText = nextLogEl.textContent || "Waiting for log output...";
+        if (nextText !== previousText) {
+          previousText = nextText;
+          logEl.textContent = nextText;
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+      } catch (_error) {
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refreshLog();
     });
+
+    window.setInterval(refreshLog, 5000);
   })();
 </script>
