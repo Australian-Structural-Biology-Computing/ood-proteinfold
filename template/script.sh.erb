@@ -27,7 +27,7 @@ RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
 OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
 mkdir -p "${OUT_DIR}"
 
-LIVE_LOG="${OUT_DIR}/live_log.log"
+LIVE_LOG="live_log.log"
 exec > >(tee -a "${LIVE_LOG}")
 exec 2>&1
 
