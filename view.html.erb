@@ -103,29 +103,34 @@ log_url = file_url(results_base, log_path)
 log_text = sanitize_live_log(tail_text(log_path))
 %>
 <div class="ood-appkit markdown">
-  <div class="container py-3">
-    <div class="row">
-      <div class="col-12">
-        <p>
-          <a href="<%= log_url %>" target="_blank" rel="noopener">Open live log file</a>
-        </p>
-        <pre id="ood-live-log" style="min-height: 12rem !important; max-height: 16rem !important; overflow: auto !important; padding: 1rem !important; background: #0f172a !important; color: #f8fafc !important; border: 1px solid #334155 !important; border-radius: 0.5rem !important; white-space: pre-wrap !important; font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace !important;"><%= log_text && !log_text.empty? ? ERB::Util.html_escape(log_text) : "Waiting for log output..." %></pre>
-      </div>
-    </div>
+  <div class="ood-live-log-card">
+    <div><b>Log</b>: <a target="_blank" rel="noopener" href="https://kod.restech.unsw.edu.au<%= log_url %>">live_log.log</a></div>
+    <pre class="ood-live-log" data-log-path="<%= ERB::Util.html_escape(log_path) %>" style="margin-top: 0.75rem !important; min-height: 9rem !important; max-height: 12rem !important; overflow: auto !important; padding: 1rem !important; background: #0f172a !important; color: #f8fafc !important; border: 1px solid #334155 !important; border-radius: 0.5rem !important; white-space: pre-wrap !important; font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace !important;"><%= log_text && !log_text.empty? ? ERB::Util.html_escape(log_text) : "Waiting for log output..." %></pre>
   </div>
 </div>
 <script>
   (() => {
-    const logEl = document.getElementById("ood-live-log");
-    if (!logEl) return;
+    const registry = window.__oodLiveLogRegistry || (window.__oodLiveLogRegistry = new Map());
+    const scriptEl = document.currentScript;
+    const logContainer = scriptEl ? scriptEl.previousElementSibling : null;
+    const logEl = logContainer ? logContainer.querySelector(".ood-live-log") : null;
+    const logPath = logEl ? logEl.dataset.logPath : null;
 
-    let previousText = logEl.textContent;
-    let refreshInFlight = false;
-    logEl.scrollTop = logEl.scrollHeight;
+    if (logEl && logPath) {
+      logEl.scrollTop = logEl.scrollHeight;
+      registry.set(logPath, {
+        element: logEl,
+        previousText: logEl.textContent
+      });
+    }
 
-    const refreshLog = async () => {
-      if (refreshInFlight || document.hidden) return;
-      refreshInFlight = true;
+    if (window.__oodLiveLogPollerInstalled) return;
+    window.__oodLiveLogPollerInstalled = true;
+    window.__oodLiveLogRefreshInFlight = false;
+
+    const refreshAllLogs = async () => {
+      if (window.__oodLiveLogRefreshInFlight || document.hidden || registry.size === 0) return;
+      window.__oodLiveLogRefreshInFlight = true;
 
       try {
         const response = await fetch(`${window.location.pathname}${window.location.search ? `${window.location.search}&` : "?"}t=${Date.now()}`, {
@@ -136,25 +141,34 @@ log_text = sanitize_live_log(tail_text(log_path))
 
         const html = await response.text();
         const parsed = new DOMParser().parseFromString(html, "text/html");
-        const nextLogEl = parsed.getElementById("ood-live-log");
-        if (!nextLogEl) return;
+        const nextLogs = new Map(
+          Array.from(parsed.querySelectorAll(".ood-live-log")).map((el) => [el.dataset.logPath, el.textContent || "Waiting for log output..."])
+        );
 
-        const nextText = nextLogEl.textContent || "Waiting for log output...";
-        if (nextText !== previousText) {
-          previousText = nextText;
-          logEl.textContent = nextText;
-          logEl.scrollTop = logEl.scrollHeight;
-        }
+        registry.forEach((entry, path) => {
+          if (!entry.element || !entry.element.isConnected) {
+            registry.delete(path);
+            return;
+          }
+
+          const nextText = nextLogs.get(path);
+          if (nextText == null) return;
+          if (nextText !== entry.previousText) {
+            entry.previousText = nextText;
+            entry.element.textContent = nextText;
+            entry.element.scrollTop = entry.element.scrollHeight;
+          }
+        });
       } catch (_error) {
       } finally {
-        refreshInFlight = false;
+        window.__oodLiveLogRefreshInFlight = false;
       }
     };
 
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) refreshLog();
+      if (!document.hidden) refreshAllLogs();
     });
 
-    window.setInterval(refreshLog, 5000);
+    window.setInterval(refreshAllLogs, 10000);
   })();
 </script>
