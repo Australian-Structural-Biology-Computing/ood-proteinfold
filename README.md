@@ -41,10 +41,10 @@ To deploy ProteinFold on your own Open OnDemand instance:
 ```
 # Example template/.env for ood-proteinfold
 
-PFOLD_CLUSTER=katana
-PFOLD_QUEUE=submission
+OOD_CLUSTER=katana
+OOD_QUEUE=submission
 PFOLD_SCRIPT_FILE=/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh
-PFOLD_EMAIL_DOMAIN=@example.edu
+OOD_EMAIL_DOMAIN=@example.edu
 PFOLD_NATIVE_DEFAULT=-A my_project;-l select=1:ncpus=2:mem=4gb;-l walltime=48:00:00
 PFOLD_NATIVE_GPU=-l select=1:ncpus=8:ngpus=1:mem=124gb;-l walltime=12:00:00
 PFOLD_RUN_ENVIRONMENT=prod
@@ -55,7 +55,7 @@ PFOLD_REPOSITORY=Australian-Structural-Biology-Computing/proteinfold
 PFOLD_NEXTFLOW_CONFIG=/apps/proteinfold/kod_proteinfold-prod.config
 PFOLD_BASE_OUT_DIR=/scratch/${USER}/proteinfold_output
 PFOLD_BASE_NXF_WORK=/scratch/${USER}/.proteinfold/work
-PFOLD_RESULTS_URL_BASE=/pun/sys/dashboard/files/fs
+OOD_RESULTS_URL_BASE=/pun/sys/dashboard/files/fs
 ```
 
 ### Python Environment for samplesheet-utils
