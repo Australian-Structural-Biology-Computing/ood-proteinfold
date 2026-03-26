@@ -110,65 +110,12 @@ log_text = sanitize_live_log(tail_text(log_path))
 </div>
 <script>
   (() => {
-    const registry = window.__oodLiveLogRegistry || (window.__oodLiveLogRegistry = new Map());
     const scriptEl = document.currentScript;
-    const logContainer = scriptEl ? scriptEl.previousElementSibling : null;
-    const logEl = logContainer ? logContainer.querySelector(".ood-live-log") : null;
-    const logPath = logEl ? logEl.dataset.logPath : null;
+    const logEl = scriptEl ? scriptEl.previousElementSibling.querySelector(".ood-live-log") : null;
+    if (!logEl) return;
 
-    if (logEl && logPath) {
+    window.requestAnimationFrame(() => {
       logEl.scrollTop = logEl.scrollHeight;
-      registry.set(logPath, {
-        element: logEl,
-        previousText: logEl.textContent
-      });
-    }
-
-    if (window.__oodLiveLogPollerInstalled) return;
-    window.__oodLiveLogPollerInstalled = true;
-    window.__oodLiveLogRefreshInFlight = false;
-
-    const refreshAllLogs = async () => {
-      if (window.__oodLiveLogRefreshInFlight || document.hidden || registry.size === 0) return;
-      window.__oodLiveLogRefreshInFlight = true;
-
-      try {
-        const response = await fetch(`${window.location.pathname}${window.location.search ? `${window.location.search}&` : "?"}t=${Date.now()}`, {
-          cache: "no-store",
-          credentials: "same-origin"
-        });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-        const html = await response.text();
-        const parsed = new DOMParser().parseFromString(html, "text/html");
-        const nextLogs = new Map(
-          Array.from(parsed.querySelectorAll(".ood-live-log")).map((el) => [el.dataset.logPath, el.textContent || "Waiting for log output..."])
-        );
-
-        registry.forEach((entry, path) => {
-          if (!entry.element || !entry.element.isConnected) {
-            registry.delete(path);
-            return;
-          }
-
-          const nextText = nextLogs.get(path);
-          if (nextText == null) return;
-          if (nextText !== entry.previousText) {
-            entry.previousText = nextText;
-            entry.element.textContent = nextText;
-            entry.element.scrollTop = entry.element.scrollHeight;
-          }
-        });
-      } catch (_error) {
-      } finally {
-        window.__oodLiveLogRefreshInFlight = false;
-      }
-    };
-
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) refreshAllLogs();
     });
-
-    window.setInterval(refreshAllLogs, 10000);
   })();
 </script>
