@@ -1,6 +1,11 @@
 #!/bin/bash
 
-source .env
+ENV_FILE=".env"
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    . "$ENV_FILE"
+    set +a
+fi
 # Set defaults to prod if .env is not found
 RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
 PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
