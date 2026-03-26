@@ -1,7 +1,27 @@
+<%
+cluster_name = ENV.fetch("PFOLD_CLUSTER", "katana")
+queue_name = ENV.fetch("PFOLD_QUEUE", "submission")
+script_path = ENV.fetch("PFOLD_SCRIPT_FILE", "/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh")
+default_native = ENV.fetch("PFOLD_NATIVE_DEFAULT", "-A kod_proteinfold;-l select=1:ncpus=2:mem=4gb;-l walltime=48:00:00")
+gpu_native = ENV.fetch("PFOLD_NATIVE_GPU", "-l select=1:mwacgpu200=gpu-mwac:ncpus=8:ngpus=1:mem=124gb;-l walltime=12:00:00")
+
+def parse_native(val)
+    val.split(/\s*;\s*/).reject(&:empty?)
+end
+
+native_default_list = parse_native(default_native)
+native_gpu_list = parse_native(gpu_native)
+
+email_default = ENV["PFOLD_EMAIL"] || "#{ENV['USER']}#{ENV.fetch('PFOLD_EMAIL_DOMAIN', '@ad.unsw.edu.au')}"
+email_selected = (defined?(email) && email && !email.strip.empty?) ? email : email_default
+%>
+
+cluster: "<%= cluster_name %>"
+
 batch_connect:
     template: "basic"
-    queue_name: "submission"
-    script_file: "/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh"
+    queue_name: "<%= queue_name %>"
+    script_file: "<%= script_path %>"
     conn_params:
         - base_out_dir
         - results_url_base
@@ -13,15 +33,16 @@ script:
     native:
     # ColabFold local DBs are only available locally on certain nodes. This is an example method for catching local ColabFold runs
      <% if (af_method == "colabfold" || af_method == "boltz") && msa_server == "local" %>
-         - "-l select=1:mwacgpu200=gpu-mwac:ncpus=8:ngpus=1:mem=124gb"
-         - "-l walltime=12:00:00"
+        <% native_gpu_list.each do |entry| %>
+         - "<%= entry %>"
+        <% end %>
          - "-N <%= (run_name || 'kod_proteinfold').gsub(' ', '_') %>"
      <% else %>
-        - "-A kod_proteinfold"
-        - "-l select=1:ncpus=2:mem=4gb"
-        - "-l walltime=48:00:00"
+        <% native_default_list.each do |entry| %>
+        - "<%= entry %>"
+        <% end %>
         - "-N <%= (run_name || 'kod_proteinfold').gsub(' ', '_') %>"
      <% end %>
     email:
-        - "<%= ENV['USER'] %>@ad.unsw.edu.au"
+        - "<%= email_selected %>"
     email_on_terminated: "<%= email_on_terminated %>"

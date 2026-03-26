@@ -13,7 +13,7 @@ form:
     - citation_request
     - katana_citation
 
-cluster: "katana"
+cluster: "<%= ENV.fetch('PFOLD_CLUSTER', 'katana') %>"
 
 attributes:
     data_warning:
