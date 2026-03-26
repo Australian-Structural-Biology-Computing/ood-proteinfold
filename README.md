@@ -33,51 +33,29 @@ To deploy ProteinFold on your own Open OnDemand instance:
    git clone https://github.com/Australian-Structural-Biology-Computing/ood-proteinfold.git /var/www/ood/apps/sys/kod-proteinfold
    ```
 
-2. **Edit files to match institutional settings**:
-   - Update `submit.yml.erb` with your facility-specific settings.
-   - Change the cluster in `form.yml.erb` to match your HPC.
-   - Create `kod_proteinfold-${RUN_ENVIRONMENT}.config` files for proteinfold-specific nextflow configurations. Or remove this line from `script.sh.erb` if not needed.
-   - Create a `template/.env` file to change any of these default parameters:
+2. **Configure for your site**:
+   - Copy `.env.example` to `template/.env`.
+   - Adjust the environment variables in `template/.env` for your cluster, queue, paths, email defaults, and output locations.
+   - If needed, set `PFOLD_NEXTFLOW_CONFIG` to your institutional Nextflow config file instead of editing `script.sh.erb`.
 
 ```
-# Example .env for ood-proteinfold
+# Example template/.env for ood-proteinfold
 
-# Base output directory for all runs (job-specific OUT_DIR set at runtime)
-BASE_OUT_DIR=/srv/scratch/${USER}/proteinfold_output
-
-# Environment name (e.g., prod, dev)
-RUN_ENVIRONMENT=prod
-
-# Project root: location of Nextflow configs and samplesheet-utils environment
-PROJECT_ROOT=/srv/scratch/sbf-pipelines/proteinfold
-
-# Database path for structure prediction modules
-DB_PATH=/srv/scratch/sbf-pipelines/proteinfold/dbs
-
-# Git branch to use for proteinfold
-BRANCH=master
-
-# Repository path for using alternative versions of proteinfold
-REPOSITORY=Australian-Structural-Biology-Computing/proteinfold
-
-# Debug group for permissions on debug files
-DEBUGGROUP=sbf-pipelines
-
-# Base debug directory (job-specific DEBUGDIR set at runtime)
-BASE_DEBUGDIR=/srv/scratch/sbf/debug
-
-# Nextflow work directory base (job-specific NXF_WORK set at runtime)
-BASE_NXF_WORK=/srv/scratch/${USER}/.proteinfold/work
-
-# Apptainer/Singularity blob cache directories (set here or via your institutional Nextflow config, e.g. https://github.com/Australian-Structural-Biology-Computing/unsw_katana)
-# APPTAINER_CACHEDIR=/srv/scratch/${USER}/.images
-# SINGULARITY_CACHEDIR=/srv/scratch/${USER}/.images
-
-# Nextflow Apptainer/Singularity image cache/library directories (set here or via institutional Nextflow config, e.g. https://github.com/nf-core/configs/blob/master/conf/pipeline/proteinfold/unsw_katana.config)
-# NXF_APPTAINER_CACHEDIR=/srv/scratch/${USER}/.images
-# NXF_SINGULARITY_CACHEDIR=/srv/scratch/${USER}/.images
-# NXF_APPTAINER_LIBRARYDIR=/srv/scratch/sbf-pipelines/proteinfold/singularity
-# NXF_SINGULARITY_LIBRARYDIR=/srv/scratch/sbf-pipelines/proteinfold/singularity
+PFOLD_CLUSTER=katana
+PFOLD_QUEUE=submission
+PFOLD_SCRIPT_FILE=/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh
+PFOLD_EMAIL_DOMAIN=@example.edu
+PFOLD_NATIVE_DEFAULT=-A my_project;-l select=1:ncpus=2:mem=4gb;-l walltime=48:00:00
+PFOLD_NATIVE_GPU=-l select=1:ncpus=8:ngpus=1:mem=124gb;-l walltime=12:00:00
+PFOLD_RUN_ENVIRONMENT=prod
+PFOLD_PROJECT_ROOT=/apps/proteinfold
+PFOLD_DB_PATH=/data/proteinfold/dbs
+PFOLD_BRANCH=master
+PFOLD_REPOSITORY=Australian-Structural-Biology-Computing/proteinfold
+PFOLD_NEXTFLOW_CONFIG=/apps/proteinfold/kod_proteinfold-prod.config
+PFOLD_BASE_OUT_DIR=/scratch/${USER}/proteinfold_output
+PFOLD_BASE_NXF_WORK=/scratch/${USER}/.proteinfold/work
+PFOLD_RESULTS_URL_BASE=/pun/sys/dashboard/files/fs
 ```
 
 ### Python Environment for samplesheet-utils
@@ -91,7 +69,7 @@ source ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate
 pip install samplesheet-utils==1.1.2
 ```
 
-Update the paths in `.env` if your environment is elsewhere.
+Prefer changing `template/.env` over editing the app templates directly so upgrades stay easy to rebase across institutions.
 
 ## Citation
 
