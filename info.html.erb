@@ -5,88 +5,8 @@ def file_url(base, path)
   "#{base}/#{encoded_path}"
 end
 
-def tail_text(path, max_bytes = 32768, max_lines = 24)
-  return nil unless File.file?(path)
-
-  File.open(path, "rb") do |file|
-    size = file.size
-    offset = [size - max_bytes, 0].max
-    file.seek(offset)
-    text = file.read.to_s
-
-    if offset > 0
-      newline_index = text.index("\n")
-      text = newline_index ? text[(newline_index + 1)..] : text
-    end
-
-    lines = text.lines
-    lines = lines.last(max_lines) if max_lines && max_lines > 0
-    lines.join
-  end
-end
-
-def sanitize_live_log(text)
-  return nil if text.nil?
-
-  ansi_pattern = /\e\[[0-9;?]*[ -\/]*[@-~]/
-  lines = text.gsub(ansi_pattern, "").split("\n")
-  cleaned = []
-  index = 0
-
-  while index < lines.length
-    line = lines[index]
-
-    if line.start_with?("WARN: cpus and memory directives are ignored when clusterOptions contains -l option")
-      index += 1
-      index += 1 while index < lines.length && lines[index].start_with?("tip:", "- ")
-      next
-    end
-
-    if line.start_with?("WARN: [PBSPRO] queue status cannot be fetched")
-      index += 1
-      index += 1 while index < lines.length && !lines[index].strip.empty?
-      index += 1 if index < lines.length && lines[index].strip.empty?
-      next
-    end
-
-    cleaned << line
-    index += 1
-  end
-
-  compact = []
-  blank_streak = 0
-
-  cleaned.each do |line|
-    if line.strip.empty?
-      blank_streak += 1
-      compact << "" if blank_streak == 1
-    else
-      blank_streak = 0
-      compact << line
-    end
-  end
-
-  compact.join("\n").strip
-end
-
 base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blank?) ? connect.base_out_dir : "/srv/scratch/#{connect.user}/proteinfold_output"
 results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : "/pun/sys/dashboard/files/fs"
-session_output_dir = (connect.respond_to?(:session_output_dir) && !connect.session_output_dir.blank?) ? connect.session_output_dir : nil
-log_dir = session_output_dir || File.join(base_out_dir, connect.run_dir)
-log_path = File.join(log_dir, "live_log.log")
-output_log_url = file_url(results_url_base, File.join(log_dir, "output.log"))
-log_text = sanitize_live_log(tail_text(log_path))
 %>
-<b>Results</b>: <a target="_blank" href="https://kod.restech.unsw.edu.au<%= file_url(results_url_base, File.join(base_out_dir, connect.run_dir)) %>"><%= connect.run_dir %></a><br>
-<b>Log</b>: <a target="_blank" href="https://kod.restech.unsw.edu.au<%= output_log_url %>">output.log</a>
-<% if log_text && !log_text.empty? %>
-<pre class="ood-completed-log" style="margin-top: 0.75rem !important; height: 7rem !important; max-height: 7rem !important; overflow: auto !important; padding: 1rem !important; background: #0f172a !important; color: #f8fafc !important; border: 1px solid #334155 !important; border-radius: 0.5rem !important; white-space: pre-wrap !important; font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace !important;"><%= ERB::Util.html_escape(log_text) %></pre>
-<script>
-  (() => {
-    document.querySelectorAll(".ood-completed-log").forEach((logEl) => {
-      logEl.scrollTop = logEl.scrollHeight;
-    });
-  })();
-</script>
-<% end %>
+<b>Results</b>: <a target="_blank" rel="noopener" href="https://kod.restech.unsw.edu.au<%= file_url(results_url_base, File.join(base_out_dir, connect.run_dir)) %>"><%= connect.run_dir %></a>
 <% end %>
