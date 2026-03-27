@@ -1,22 +1,4 @@
 <%
-unless defined?(ood_site_env_loaded)
-  env_path = [File.expand_path("template/.env", Dir.pwd), File.expand_path(".env", Dir.pwd)].find { |path| File.file?(path) }
-  if env_path
-    File.foreach(env_path) do |line|
-      stripped = line.strip
-      next if stripped.empty? || stripped.start_with?("#")
-      key, raw_value = line.split("=", 2)
-      next if raw_value.nil?
-      value = raw_value.strip
-      value = value[1..-2] if (value.start_with?('"') && value.end_with?('"')) || (value.start_with?("'") && value.end_with?("'"))
-      value = value.gsub(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/) { ENV[$1 || $2].to_s }
-      key = key.strip
-      ENV[key] = value if ENV[key].to_s.empty?
-    end
-  end
-  ood_site_env_loaded = true
-end
-
 def file_url(base, path)
   encoded_path = path.to_s.split("/").reject(&:empty?).map { |segment| ERB::Util.url_encode(segment) }.join("/")
   "#{base}/#{encoded_path}"
@@ -113,8 +95,8 @@ def sanitize_live_log(text)
   compact.join("\n").strip
 end
 
-base_dir = (defined?(base_out_dir) && base_out_dir && !base_out_dir.to_s.empty?) ? base_out_dir.to_s : ENV.fetch("PFOLD_BASE_OUT_DIR")
-results_base = (defined?(results_url_base) && results_url_base && !results_url_base.to_s.empty?) ? results_url_base.to_s : ENV.fetch("OOD_RESULTS_URL_BASE")
+base_dir = (defined?(base_out_dir) && base_out_dir && !base_out_dir.to_s.empty?) ? base_out_dir.to_s : (ENV["PFOLD_BASE_OUT_DIR"] || "/srv/scratch/#{user}/proteinfold_output")
+results_base = (defined?(results_url_base) && results_url_base && !results_url_base.to_s.empty?) ? results_url_base.to_s : (ENV["OOD_RESULTS_URL_BASE"] || "/pun/sys/dashboard/files/fs")
 log_dir = (defined?(session_output_dir) && session_output_dir && !session_output_dir.to_s.empty?) ? session_output_dir.to_s : File.join(base_dir, run_dir.to_s)
 log_path = File.join(log_dir, "live_log.log")
 log_url = file_url(results_base, log_path)
