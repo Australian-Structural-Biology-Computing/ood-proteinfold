@@ -5,8 +5,8 @@ def file_url(base, path)
   "#{base}/#{encoded_path}"
 end
 
-base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blank?) ? connect.base_out_dir : (ENV["PFOLD_BASE_OUT_DIR"] || "/srv/scratch/#{connect.user}/proteinfold_output")
-results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : (ENV["OOD_RESULTS_URL_BASE"] || "/pun/sys/dashboard/files/fs")
+base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blank?) ? connect.base_out_dir : ENV.fetch("PFOLD_BASE_OUT_DIR")
+results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : ENV.fetch("OOD_RESULTS_URL_BASE")
 %>
 <b>Results</b>: <a target="_blank" rel="noopener" href="<%= file_url(results_url_base, File.join(base_out_dir, connect.run_dir)) %>"><%= connect.run_dir %></a>
 <% end %>

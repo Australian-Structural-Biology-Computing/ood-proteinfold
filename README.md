@@ -41,9 +41,9 @@ To deploy ProteinFold on your own Open OnDemand instance:
 ```
 # Example template/.env for ood-proteinfold
 
-OOD_CLUSTER=katana
-OOD_QUEUE=submission
-PFOLD_SCRIPT_FILE=/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh
+OOD_CLUSTER=your_cluster_name
+OOD_QUEUE=your_queue_name
+PFOLD_SCRIPT_FILE=/path/to/proteinfold/bin/start-alphafold2.sh
 OOD_EMAIL_DOMAIN=@example.edu
 PFOLD_NATIVE_DEFAULT=-A my_project;-l select=1:ncpus=2:mem=4gb;-l walltime=48:00:00
 PFOLD_NATIVE_GPU=-l select=1:ncpus=8:ngpus=1:mem=124gb;-l walltime=12:00:00
@@ -52,7 +52,7 @@ PFOLD_PROJECT_ROOT=/apps/proteinfold
 PFOLD_DB_PATH=/data/proteinfold/dbs
 PFOLD_BRANCH=master
 PFOLD_REPOSITORY=Australian-Structural-Biology-Computing/proteinfold
-PFOLD_NEXTFLOW_CONFIG=/apps/proteinfold/kod_proteinfold-prod.config
+PFOLD_NEXTFLOW_CONFIG=/apps/proteinfold/site.config
 PFOLD_BASE_OUT_DIR=/scratch/${USER}/proteinfold_output
 PFOLD_BASE_NXF_WORK=/scratch/${USER}/.proteinfold/work
 OOD_RESULTS_URL_BASE=/pun/sys/dashboard/files/fs
