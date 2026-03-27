@@ -1,3 +1,23 @@
+<%
+unless defined?(ood_site_env_loaded)
+  env_path = [File.expand_path("template/.env", Dir.pwd), File.expand_path(".env", Dir.pwd)].find { |path| File.file?(path) }
+  if env_path
+    File.foreach(env_path) do |line|
+      stripped = line.strip
+      next if stripped.empty? || stripped.start_with?("#")
+      key, raw_value = line.split("=", 2)
+      next if raw_value.nil?
+      value = raw_value.strip
+      value = value[1..-2] if (value.start_with?('"') && value.end_with?('"')) || (value.start_with?("'") && value.end_with?("'"))
+      value = value.gsub(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/) { ENV[$1 || $2].to_s }
+      key = key.strip
+      ENV[key] = value if ENV[key].to_s.empty?
+    end
+  end
+  ood_site_env_loaded = true
+end
+%>
+
 <% if !connect.user.blank? %>
 <%
 def file_url(base, path)
