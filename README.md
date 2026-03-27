@@ -71,6 +71,12 @@ pip install samplesheet-utils==1.1.2
 
 Prefer changing `template/.env` over editing the app templates directly so upgrades stay easy to rebase across institutions.
 
+Portal rendering and job runtime are configured differently:
+- portal-side defaults live at the top of `form.yml.erb`, `submit.yml.erb`, `info.html.erb`, `completed.html.erb`, and `view.html.erb`
+- runtime config lives in `template/.env`, which is intentionally gitignored
+
+For CI/CD, prefer generating `template/.env` during deployment from site-managed config or secrets rather than committing a real site config file to the repository.
+
 ## Citation
 
 Please cite [doi.org/10.26190/4KQF-M552](https://doi.org/10.26190/4KQF-M552) and acknowledge the Structural Biology Facility at UNSW in publications.
