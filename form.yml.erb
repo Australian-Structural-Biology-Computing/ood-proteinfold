@@ -1,3 +1,7 @@
+<%
+portal_default_cluster = ENV.fetch("OOD_CLUSTER", "katana")
+%>
+
 form:
     - data_warning
     - samplesheet
@@ -13,7 +17,7 @@ form:
     - citation_request
     - katana_citation
 
-cluster: "<%= ENV.fetch('OOD_CLUSTER', 'katana') %>"
+cluster: "<%= portal_default_cluster %>"
 
 attributes:
     data_warning:
