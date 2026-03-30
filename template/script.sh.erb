@@ -246,7 +246,7 @@ fi
 
 if [ "${MODE}" == "FASTA_INPUT" ];
 then
-    mkdir fasta
+    mkdir -p fasta
     cp "${user_input}" ./fasta/
     create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
@@ -254,7 +254,7 @@ fi
 
 if [ "${MODE}" == "DIRECTORY" ];
 then
-    mkdir fasta
+    mkdir -p fasta
     working_dir=$(pwd)
     cd "${user_input}"
     for filename in *
