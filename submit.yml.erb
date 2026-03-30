@@ -6,11 +6,11 @@ portal_default_native = "-A kod_proteinfold;-l select=1:ncpus=2:mem=4gb;-l wallt
 portal_default_gpu_native = "-l select=1:mwacgpu200=gpu-mwac:ncpus=8:ngpus=1:mem=124gb;-l walltime=12:00:00"
 portal_default_email_domain = "@ad.unsw.edu.au"
 
-cluster_name = ENV.fetch("OOD_CLUSTER", portal_default_cluster)
-queue_name = ENV.fetch("OOD_QUEUE", portal_default_queue)
-script_path = ENV.fetch("PFOLD_SCRIPT_FILE", portal_default_script_path)
-default_native = ENV.fetch("PFOLD_NATIVE_DEFAULT", portal_default_native)
-gpu_native = ENV.fetch("PFOLD_NATIVE_GPU", portal_default_gpu_native)
+cluster_name = portal_default_cluster
+queue_name = portal_default_queue
+script_path = portal_default_script_path
+default_native = portal_default_native
+gpu_native = portal_default_gpu_native
 
 def parse_native(val)
     val.split(/\s*;\s*/).reject(&:empty?)
@@ -19,7 +19,7 @@ end
 native_default_list = parse_native(default_native)
 native_gpu_list = parse_native(gpu_native)
 
-email_default = ENV["OOD_EMAIL"] || "#{ENV['USER']}#{ENV.fetch('OOD_EMAIL_DOMAIN', portal_default_email_domain)}"
+email_default = "#{ENV['USER']}#{portal_default_email_domain}"
 email_selected = (defined?(email) && email && !email.strip.empty?) ? email : email_default
 %>
 

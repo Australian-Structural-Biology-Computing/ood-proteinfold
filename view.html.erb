@@ -98,8 +98,8 @@ def sanitize_live_log(text)
   compact.join("\n").strip
 end
 
-base_dir = (defined?(base_out_dir) && base_out_dir && !base_out_dir.to_s.empty?) ? base_out_dir.to_s : (ENV["PFOLD_BASE_OUT_DIR"] || portal_default_base_out_dir)
-results_base = (defined?(results_url_base) && results_url_base && !results_url_base.to_s.empty?) ? results_url_base.to_s : (ENV["OOD_RESULTS_URL_BASE"] || portal_default_results_url_base)
+base_dir = (defined?(base_out_dir) && base_out_dir && !base_out_dir.to_s.empty?) ? base_out_dir.to_s : portal_default_base_out_dir
+results_base = (defined?(results_url_base) && results_url_base && !results_url_base.to_s.empty?) ? results_url_base.to_s : portal_default_results_url_base
 log_dir = (defined?(session_output_dir) && session_output_dir && !session_output_dir.to_s.empty?) ? session_output_dir.to_s : File.join(base_dir, run_dir.to_s)
 log_path = File.join(log_dir, "live_log.log")
 log_url = file_url(results_base, log_path)

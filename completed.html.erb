@@ -72,8 +72,8 @@ def sanitize_live_log(text)
   compact.join("\n").strip
 end
 
-base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blank?) ? connect.base_out_dir : (ENV["PFOLD_BASE_OUT_DIR"] || portal_default_base_out_dir)
-results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : (ENV["OOD_RESULTS_URL_BASE"] || portal_default_results_url_base)
+base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blank?) ? connect.base_out_dir : portal_default_base_out_dir
+results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : portal_default_results_url_base
 session_output_dir = (connect.respond_to?(:session_output_dir) && !connect.session_output_dir.blank?) ? connect.session_output_dir : nil
 log_dir = session_output_dir || File.join(base_out_dir, connect.run_dir)
 live_log_path = File.join(log_dir, "live_log.log")
