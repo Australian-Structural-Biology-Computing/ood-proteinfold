@@ -35,16 +35,14 @@ To deploy ProteinFold on your own Open OnDemand instance:
 
 2. **Configure for your site**:
    - Copy `.env.example` to `template/.env`.
-   - Adjust the environment variables in `template/.env` for your cluster, queue, paths, email defaults, and output locations.
+   - Adjust the runtime environment variables in `template/.env` for paths, caches, output locations, and other job-time settings.
+   - Adjust the portal-side defaults at the top of the ERB files for cluster, queue, and other pre-submit settings.
    - If needed, set `PFOLD_NEXTFLOW_CONFIG` to your institutional Nextflow config file instead of editing `script.sh.erb`.
 
 ```
 # Example template/.env for ood-proteinfold
 
-OOD_CLUSTER=your_cluster_name
-OOD_QUEUE=your_queue_name
 PFOLD_SCRIPT_FILE=/path/to/proteinfold/bin/start-alphafold2.sh
-OOD_EMAIL_DOMAIN=@example.edu
 PFOLD_NATIVE_DEFAULT=-A my_project;-l select=1:ncpus=2:mem=4gb;-l walltime=48:00:00
 PFOLD_NATIVE_GPU=-l select=1:ncpus=8:ngpus=1:mem=124gb;-l walltime=12:00:00
 PFOLD_RUN_ENVIRONMENT=prod
