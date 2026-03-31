@@ -112,10 +112,10 @@ echo "${MODE}"
 # Validate input file format compatibility with selected method
 af_method="<%= context.af_method %>"
 
-# Check YAML/YML compatibility - only supported by Boltz and RoseTTAFold-All-Atom
+# Check YAML/YML compatibility - only supported by Boltz
 if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input}" =~ \.(yaml|yml)$ ]]; then
-    if [ "${af_method}" != "boltz" ] && [ "${af_method}" != "rosettafold_all_atom" ]; then
-        echo "ERROR: YAML/YML input files are only supported by Boltz and RoseTTAFold-All-Atom methods."
+    if [ "${af_method}" != "boltz" ]; then
+        echo "ERROR: YAML/YML input files are only supported by Boltz."
         echo "Current method: ${af_method}"
         exit 1
     fi
@@ -133,10 +133,10 @@ fi
 # Check directory contents for incompatible file types
 if [ "${MODE}" == "DIRECTORY" ] && [ -d "${user_input}" ]; then
     # Check for YAML/YML files in directory
-    if [ "${af_method}" != "boltz" ] && [ "${af_method}" != "rosettafold_all_atom" ]; then
+    if [ "${af_method}" != "boltz" ]; then
         yaml_files=$(find "${user_input}" -type f \( -name "*.yaml" -o -name "*.yml" \) 2>/dev/null || true)
         if [ ! -z "${yaml_files}" ]; then
-            echo "ERROR: Directory contains YAML/YML files, which are only supported by Boltz and RoseTTAFold-All-Atom methods."
+            echo "ERROR: Directory contains YAML/YML files, which are only supported by Boltz."
             echo "Current method: ${af_method}"
             echo "Found YAML/YML files:"
             echo "${yaml_files}"
@@ -285,9 +285,6 @@ if [ "<%= context.af_method %>" == "esmfold" ]; then
         ARGS="${ARGS} --esmfold_num_recycles ${ESMFOLD_RECYCLES}"
     fi
 fi
-
-[[ "<%= context.af_method %>" == "rosettafold_all_atom" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="${ARGS} --rosettafold_all_atom_db ${DB_PATH}"
-[[ "<%= context.af_method %>" == "helixfold3"  ]] && PROT_MODE="helixfold3" && ARGS="${ARGS} --helixfold3_db ${DB_PATH}"
 
 nextflow -c "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config" run ${REPOSITORY} -r ${BRANCH} -latest \
     --input "${SAMPLESHEET}" \
