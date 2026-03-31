@@ -1,6 +1,6 @@
 # ood-proteinfold (OnDemand App)
 
-`ood-proteinfold` is an [Open OnDemand](https://openondemand.org/) interactive app for computational protein structure prediction using [Proteinfold](https://nf-co.re/proteinfold/) ([AlphaFold2](https://github.com/google-deepmind/alphafold/), [Boltz](https://github.com/jwohlwend/boltz/), [ColabFold](https://github.com/sokrypton/ColabFold), [ESMFold](https://github.com/facebookresearch/esm), and [RoseTTAFold-All-Atom](https://github.com/baker-laboratory/RoseTTAFold-All-Atom/)) originally built for [UNSW's Katana HPC](https://www.unsw.edu.au/research/facilities-and-infrastructure/find-an-instrument/restech-instruments/katana).
+`ood-proteinfold` is an [Open OnDemand](https://openondemand.org/) interactive app for computational protein structure prediction using [Proteinfold](https://nf-co.re/proteinfold/) ([AlphaFold2](https://github.com/google-deepmind/alphafold/), [Boltz](https://github.com/jwohlwend/boltz/), [ColabFold](https://github.com/sokrypton/ColabFold) and [ESMFold](https://github.com/facebookresearch/esm) originally built for [UNSW's Katana HPC](https://www.unsw.edu.au/research/facilities-and-infrastructure/find-an-instrument/restech-instruments/katana).
 
 ## Features
 
