@@ -1,3 +1,7 @@
+<%
+portal_default_cluster = "katana"
+%>
+
 form:
     - data_warning
     - samplesheet
@@ -13,7 +17,7 @@ form:
     - citation_request
     - katana_citation
 
-cluster: "katana"
+cluster: "<%= portal_default_cluster %>"
 
 attributes:
     data_warning:
@@ -32,7 +36,7 @@ attributes:
         class: "d-none"
         label: "Input Options"
         help: |
-            • <b>Directory:</b> <code>/srv/scratch/z3141592/my_experiment/</code>
+            • <b>Directory:</b> <code>/path/to/my_experiment/</code>
             <br>• <b>Single file:</b> <code>protein.fasta</code>, <code>protein.yaml</code>, or <code>samplesheet.csv</code>
             <br>• <b>Sequence:</b> <code>NLYIQWLKDGGPSSGRPPPS</code> or <code>NLYIQWLKDGGPSSGRPPPS:MKTVRQERLKSDHELFRTHT</code>
             <br>📖 <a href="https://unsw.sharepoint.com/sites/StructuralBiologyFacility-UserDocumentation/SitePages/ProteinFold-User-Guide.aspx?ga=1#preparing-your-inputs">User Guide</a> for advanced options.

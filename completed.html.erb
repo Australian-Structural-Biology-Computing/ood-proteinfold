@@ -1,5 +1,8 @@
 <% if !connect.user.blank? %>
 <%
+portal_default_base_out_dir = "/srv/scratch/#{connect.user}/proteinfold_output"
+portal_default_results_url_base = "/pun/sys/dashboard/files/fs"
+
 def file_url(base, path)
   encoded_path = path.to_s.split("/").reject(&:empty?).map { |segment| ERB::Util.url_encode(segment) }.join("/")
   "#{base}/#{encoded_path}"
@@ -69,8 +72,8 @@ def sanitize_live_log(text)
   compact.join("\n").strip
 end
 
-base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blank?) ? connect.base_out_dir : "/srv/scratch/#{connect.user}/proteinfold_output"
-results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : "/pun/sys/dashboard/files/fs"
+base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blank?) ? connect.base_out_dir : portal_default_base_out_dir
+results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : portal_default_results_url_base
 session_output_dir = (connect.respond_to?(:session_output_dir) && !connect.session_output_dir.blank?) ? connect.session_output_dir : nil
 log_dir = session_output_dir || File.join(base_out_dir, connect.run_dir)
 live_log_path = File.join(log_dir, "live_log.log")
@@ -82,7 +85,7 @@ summary_log_label = File.file?(output_log_path) ? "output.log" : "live_log.log"
 log_text = sanitize_live_log(tail_text(live_log_path))
 %>
 <div class="ood-completed-log-card">
-<div><b>Log</b>: <a target="_blank" rel="noopener" href="https://kod.restech.unsw.edu.au<%= summary_log_url %>"><%= summary_log_label %></a></div>
+<div><b>Log</b>: <a target="_blank" rel="noopener" href="<%= summary_log_url %>"><%= summary_log_label %></a></div>
 <% if log_text && !log_text.empty? %>
 <pre class="ood-completed-log" style="margin-top: 0.75rem !important; height: 7rem !important; max-height: 7rem !important; overflow: auto !important; padding: 1rem !important; background: #0f172a !important; color: #f8fafc !important; border: 1px solid #334155 !important; border-radius: 0.5rem !important; white-space: pre-wrap !important; font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace !important;"><%= ERB::Util.html_escape(log_text) %></pre>
 <script>

@@ -1,7 +1,34 @@
+<%
+portal_default_cluster = "katana"
+portal_default_queue = "submission"
+portal_default_script_path = "/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh"
+portal_default_native = "-A kod_proteinfold;-l select=1:ncpus=2:mem=4gb;-l walltime=48:00:00"
+portal_default_gpu_native = "-l select=1:mwacgpu200=gpu-mwac:ncpus=8:ngpus=1:mem=124gb;-l walltime=12:00:00"
+portal_default_email_domain = "@ad.unsw.edu.au"
+
+cluster_name = portal_default_cluster
+queue_name = portal_default_queue
+script_path = portal_default_script_path
+default_native = portal_default_native
+gpu_native = portal_default_gpu_native
+
+def parse_native(val)
+    val.split(/\s*;\s*/).reject(&:empty?)
+end
+
+native_default_list = parse_native(default_native)
+native_gpu_list = parse_native(gpu_native)
+
+email_default = "#{ENV['USER']}#{portal_default_email_domain}"
+email_selected = (defined?(email) && email && !email.strip.empty?) ? email : email_default
+%>
+
+cluster: "<%= cluster_name %>"
+
 batch_connect:
     template: "basic"
-    queue_name: "submission"
-    script_file: "/srv/scratch/sbf-pipelines/proteinfold/bin/start-alphafold2.sh"
+    queue_name: "<%= queue_name %>"
+    script_file: "<%= script_path %>"
     conn_params:
         - base_out_dir
         - results_url_base
@@ -13,15 +40,16 @@ script:
     native:
     # ColabFold local DBs are only available locally on certain nodes. This is an example method for catching local ColabFold runs
      <% if (af_method == "colabfold" || af_method == "boltz") && msa_server == "local" %>
-         - "-l select=1:mwacgpu200=gpu-mwac:ncpus=8:ngpus=1:mem=124gb"
-         - "-l walltime=12:00:00"
+        <% native_gpu_list.each do |entry| %>
+         - "<%= entry %>"
+        <% end %>
          - "-N <%= (run_name || 'kod_proteinfold').gsub(' ', '_') %>"
      <% else %>
-        - "-A kod_proteinfold"
-        - "-l select=1:ncpus=2:mem=4gb"
-        - "-l walltime=48:00:00"
+        <% native_default_list.each do |entry| %>
+        - "<%= entry %>"
+        <% end %>
         - "-N <%= (run_name || 'kod_proteinfold').gsub(' ', '_') %>"
      <% end %>
     email:
-        - "<%= ENV['USER'] %>@ad.unsw.edu.au"
+        - "<%= email_selected %>"
     email_on_terminated: "<%= email_on_terminated %>"

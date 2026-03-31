@@ -1,13 +1,44 @@
 #!/bin/bash
 
-source .env
-# Set defaults to prod if .env is not found
-RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
-PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
-DB_PATH=${DB_PATH:-/srv/scratch/sbf-pipelines/proteinfold/dbs}
-BRANCH=${BRANCH:-master}
-REPOSITORY=${REPOSITORY:-Australian-Structural-Biology-Computing/proteinfold}
-DEBUGGROUP=${DEBUGGROUP:-sbf}
+ENV_FILE=".env"
+if [ -f "$ENV_FILE" ]; then
+    set -a
+    . "$ENV_FILE"
+    set +a
+fi
+
+require_var() {
+    local name="$1"
+    if [ -z "${!name:-}" ]; then
+        echo "ERROR: Required config variable '$name' is not set. Define it in template/.env or the environment." >&2
+        exit 1
+    fi
+}
+
+require_var PFOLD_RUN_ENVIRONMENT
+require_var PFOLD_PROJECT_ROOT
+require_var PFOLD_DB_PATH
+require_var PFOLD_BRANCH
+require_var PFOLD_REPOSITORY
+require_var PFOLD_DEBUGGROUP
+require_var PFOLD_NEXTFLOW_CONFIG
+require_var PFOLD_BASE_DEBUGDIR
+require_var PFOLD_BASE_NXF_WORK
+require_var PFOLD_BASE_OUT_DIR
+require_var APPTAINER_CACHEDIR
+require_var SINGULARITY_CACHEDIR
+require_var NXF_APPTAINER_CACHEDIR
+require_var NXF_SINGULARITY_CACHEDIR
+require_var NXF_APPTAINER_LIBRARYDIR
+require_var NXF_SINGULARITY_LIBRARYDIR
+
+RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-${PFOLD_RUN_ENVIRONMENT}}
+PROJECT_ROOT=${PROJECT_ROOT:-${PFOLD_PROJECT_ROOT}}
+DB_PATH=${DB_PATH:-${PFOLD_DB_PATH}}
+BRANCH=${BRANCH:-${PFOLD_BRANCH}}
+REPOSITORY=${REPOSITORY:-${PFOLD_REPOSITORY}}
+DEBUGGROUP=${DEBUGGROUP:-${PFOLD_DEBUGGROUP}}
+NEXTFLOW_CONFIG=${NEXTFLOW_CONFIG:-${PFOLD_NEXTFLOW_CONFIG}}
 
 set -xo pipefail
 set -eE
@@ -16,13 +47,13 @@ set -eE
 NOW=$(date +%Y%m%d_%H%M%S)
 RUNNAME="${NOW}_${USER}"
 
-BASE_DEBUGDIR=${BASE_DEBUGDIR:-"/srv/scratch/sbf/debug"}
+BASE_DEBUGDIR=${BASE_DEBUGDIR:-${PFOLD_BASE_DEBUGDIR}}
 DEBUGDIR="${BASE_DEBUGDIR}/${RUNNAME}"
 
-BASE_NXF_WORK=${BASE_NXF_WORK:-"/srv/scratch/${USER}/.proteinfold/work"}
+BASE_NXF_WORK=${BASE_NXF_WORK:-${PFOLD_BASE_NXF_WORK}}
 export NXF_WORK="${BASE_NXF_WORK}/${RUNNAME}"
 
-BASE_OUT_DIR=${BASE_OUT_DIR:-"/srv/scratch/${USER}/proteinfold_output"}
+BASE_OUT_DIR=${BASE_OUT_DIR:-${PFOLD_BASE_OUT_DIR}}
 RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
 OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
 mkdir -p "${OUT_DIR}"
@@ -47,14 +78,14 @@ VERSION_SAMPLESHEET_UTILS="1.3.4"
 source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
 
 # Native environment cacheDir used for caching blobs during image pulls
-export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
-export SINGULARITY_CACHEDIR="${SINGULARITY_CACHEDIR:-/srv/scratch/${USER}/.images}"
+export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR}"
+export SINGULARITY_CACHEDIR="${SINGULARITY_CACHEDIR}"
 
 # Nextflow variables, checks libraryDir and if image is not found downloads to cache
-export NXF_APPTAINER_CACHEDIR="${NXF_APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
-export NXF_SINGULARITY_CACHEDIR="${NXF_SINGULARITY_CACHEDIR:-/srv/scratch/${USER}/.images}"
-export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
-export NXF_SINGULARITY_LIBRARYDIR="${NXF_SINGULARITY_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
+export NXF_APPTAINER_CACHEDIR="${NXF_APPTAINER_CACHEDIR}"
+export NXF_SINGULARITY_CACHEDIR="${NXF_SINGULARITY_CACHEDIR}"
+export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR}"
+export NXF_SINGULARITY_LIBRARYDIR="${NXF_SINGULARITY_LIBRARYDIR}"
 
 export PROTEINFOLD_VERSION="2.0.0dev"
 
@@ -215,7 +246,7 @@ fi
 
 if [ "${MODE}" == "FASTA_INPUT" ];
 then
-    mkdir fasta
+    mkdir -p fasta
     cp "${user_input}" ./fasta/
     create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
@@ -223,7 +254,7 @@ fi
 
 if [ "${MODE}" == "DIRECTORY" ];
 then
-    mkdir fasta
+    mkdir -p fasta
     working_dir=$(pwd)
     cd "${user_input}"
     for filename in *
@@ -289,7 +320,7 @@ fi
 [[ "<%= context.af_method %>" == "rosettafold_all_atom" ]] && PROT_MODE="rosettafold_all_atom" && ARGS="${ARGS} --rosettafold_all_atom_db ${DB_PATH}"
 [[ "<%= context.af_method %>" == "helixfold3"  ]] && PROT_MODE="helixfold3" && ARGS="${ARGS} --helixfold3_db ${DB_PATH}"
 
-nextflow -c "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config" run ${REPOSITORY} -r ${BRANCH} -latest \
+nextflow -c "${NEXTFLOW_CONFIG}" run ${REPOSITORY} -r ${BRANCH} -latest \
     --input "${SAMPLESHEET}" \
     --outdir "${OUT_DIR}" \
     --mode "${PROT_MODE}" \
