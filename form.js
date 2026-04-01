@@ -1,5 +1,18 @@
 (() => {
   const CONTEXT_PREFIX = "batch_connect_session_context";
+  const COLABFOLD_ADVANCED_HIDE_TARGETS = [
+    "colabfold_num_seeds",
+    "colabfold_random_seed",
+    "colabfold_use_dropout",
+    "colabfold_max_seq",
+    "colabfold_max_extra_seq"
+  ];
+  const CHECKBOX_HIDE_RULES = {
+    colabfold_advanced_options: {
+      hideWhenChecked: new Set(),
+      hideWhenUnchecked: new Set(COLABFOLD_ADVANCED_HIDE_TARGETS)
+    }
+  };
 
   const escapeForSelector = (value) => {
     if (window.CSS && typeof window.CSS.escape === "function") {
@@ -41,6 +54,22 @@
       });
     });
     return targets;
+  };
+
+  const getFieldNameForControl = (element) => {
+    if (!element) return "";
+
+    const nameAttribute = element.getAttribute("name") || "";
+    const contextMatch = nameAttribute.match(/\[([^\]]+)\]$/);
+    if (contextMatch && contextMatch[1]) return contextMatch[1];
+
+    const idAttribute = element.getAttribute("id") || "";
+    const contextPrefix = `${CONTEXT_PREFIX}_`;
+    if (idAttribute.startsWith(contextPrefix)) {
+      return idAttribute.slice(contextPrefix.length).replace(/_id$/, "");
+    }
+
+    return idAttribute.replace(/_id$/, "");
   };
 
   const getFieldElements = (fieldName) => {
@@ -121,21 +150,41 @@
   };
 
   const initDynamicHide = () => {
-    const controllers = Array.from(document.querySelectorAll("select")).filter((select) =>
+    const selectControllers = Array.from(document.querySelectorAll("select")).filter((select) =>
       Array.from(select.options).some(hasHideAttribute)
     );
+    const checkboxControllers = Array.from(document.querySelectorAll("input[type='checkbox']")).filter((checkbox) => {
+      const fieldName = getFieldNameForControl(checkbox);
+      return Boolean(fieldName && CHECKBOX_HIDE_RULES[fieldName]);
+    });
+    const controllers = [...selectControllers, ...checkboxControllers];
 
     if (controllers.length === 0) return;
 
     const evaluate = () => {
       const fieldHiddenState = new Map();
 
-      controllers.forEach((select) => {
+      selectControllers.forEach((select) => {
         const allTargets = getAllHideTargetsForSelect(select);
         const selectedOption = select.selectedOptions && select.selectedOptions.length > 0
           ? select.selectedOptions[0]
           : select.options[select.selectedIndex];
         const selectedHiddenTargets = getOptionHideTargets(selectedOption);
+
+        allTargets.forEach((target) => {
+          const shouldHide = selectedHiddenTargets.has(target);
+          const previous = fieldHiddenState.get(target) || false;
+          fieldHiddenState.set(target, previous || shouldHide);
+        });
+      });
+
+      checkboxControllers.forEach((checkbox) => {
+        const fieldName = getFieldNameForControl(checkbox);
+        const rules = CHECKBOX_HIDE_RULES[fieldName];
+        if (!rules) return;
+
+        const allTargets = new Set([...rules.hideWhenChecked, ...rules.hideWhenUnchecked]);
+        const selectedHiddenTargets = checkbox.checked ? rules.hideWhenChecked : rules.hideWhenUnchecked;
 
         allTargets.forEach((target) => {
           const shouldHide = selectedHiddenTargets.has(target);
