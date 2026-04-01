@@ -247,6 +247,11 @@ fi
 PROT_MODE=""
 ARGS=""
 COLABFOLD_RECYCLES="<%= context.colabfold_num_recycles %>"
+COLABFOLD_NUM_SEEDS="<%= context.colabfold_num_seeds %>"
+COLABFOLD_RANDOM_SEED="<%= context.colabfold_random_seed %>"
+COLABFOLD_USE_DROPOUT="<%= context.colabfold_use_dropout %>"
+COLABFOLD_MAX_SEQ="<%= context.colabfold_max_seq %>"
+COLABFOLD_MAX_EXTRA_SEQ="<%= context.colabfold_max_extra_seq %>"
 ESMFOLD_RECYCLES="<%= context.esmfold_num_recycles %>"
 BOLTZ_USE_POTENTIALS="<%= context.boltz_use_potentials %>"
 SAVE_INTERMEDIATES="<%= context.save_intermediates %>"
@@ -283,6 +288,21 @@ if [ "<%= context.af_method %>" == "colabfold" ]; then
     ARGS="${ARGS} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER} --colabfold_model_preset ${prot_mode}"
     if [ -n "${COLABFOLD_RECYCLES}" ]; then
         ARGS="${ARGS} --colabfold_num_recycles ${COLABFOLD_RECYCLES}"
+    fi
+    if [ -n "${COLABFOLD_NUM_SEEDS}" ]; then
+        ARGS="${ARGS} --colabfold_num_seeds ${COLABFOLD_NUM_SEEDS}"
+    fi
+    if [ -n "${COLABFOLD_RANDOM_SEED}" ]; then
+        ARGS="${ARGS} --colabfold_random_seed ${COLABFOLD_RANDOM_SEED}"
+    fi
+    if [ "${COLABFOLD_USE_DROPOUT}" == "true" ]; then
+        ARGS="${ARGS} --colabfold_use_dropout"
+    fi
+    if [ -n "${COLABFOLD_MAX_SEQ}" ]; then
+        ARGS="${ARGS} --colabfold_max_seq ${COLABFOLD_MAX_SEQ}"
+    fi
+    if [ -n "${COLABFOLD_MAX_EXTRA_SEQ}" ]; then
+        ARGS="${ARGS} --colabfold_max_extra_seq ${COLABFOLD_MAX_EXTRA_SEQ}"
     fi
 fi
 
