@@ -248,13 +248,41 @@ PROT_MODE=""
 ARGS=""
 COLABFOLD_RECYCLES="<%= context.colabfold_num_recycles %>"
 COLABFOLD_NUM_SEEDS="<%= context.colabfold_num_seeds %>"
-COLABFOLD_RANDOM_SEED="<%= context.colabfold_random_seed %>"
+USE_RANDOM_SEED="<%= context.use_random_seed %>"
+RANDOM_SEED=""
+if [ "${USE_RANDOM_SEED}" == "yes" ]; then
+    RANDOM_SEED="<%= context.random_seed %>"
+fi
 COLABFOLD_USE_DROPOUT="<%= context.colabfold_use_dropout %>"
-COLABFOLD_MAX_SEQ="<%= context.colabfold_max_seq %>"
-COLABFOLD_MAX_EXTRA_SEQ="<%= context.colabfold_max_extra_seq %>"
+COLABFOLD_MAX_MSA="<%= context.colabfold_max_msa %>"
+COLABFOLD_MAX_SEQ=""
+COLABFOLD_MAX_EXTRA_SEQ=""
 ESMFOLD_RECYCLES="<%= context.esmfold_num_recycles %>"
 BOLTZ_USE_POTENTIALS="<%= context.boltz_use_potentials %>"
 SAVE_INTERMEDIATES="<%= context.save_intermediates %>"
+
+case "${COLABFOLD_MAX_MSA}" in
+    "512:1024")
+        COLABFOLD_MAX_SEQ="512"
+        COLABFOLD_MAX_EXTRA_SEQ="1024"
+        ;;
+    "256:512")
+        COLABFOLD_MAX_SEQ="256"
+        COLABFOLD_MAX_EXTRA_SEQ="512"
+        ;;
+    "64:128")
+        COLABFOLD_MAX_SEQ="64"
+        COLABFOLD_MAX_EXTRA_SEQ="128"
+        ;;
+    "32:64")
+        COLABFOLD_MAX_SEQ="32"
+        COLABFOLD_MAX_EXTRA_SEQ="64"
+        ;;
+    "16:32")
+        COLABFOLD_MAX_SEQ="16"
+        COLABFOLD_MAX_EXTRA_SEQ="32"
+        ;;
+esac
 
 if [ "<%= context.full_dbs %>" == "full" ];
 then
@@ -273,6 +301,9 @@ fi
 if [ "<%= context.af_method %>" == "alphafold2" ]; then
     PROT_MODE="alphafold2"
     ARGS="${ARGS} --alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --alphafold2_full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
+    if [ -n "${RANDOM_SEED}" ]; then
+        ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
+    fi
 fi
 
 if [ "<%= context.af_method %>" == "boltz" ]; then
@@ -292,8 +323,8 @@ if [ "<%= context.af_method %>" == "colabfold" ]; then
     if [ -n "${COLABFOLD_NUM_SEEDS}" ]; then
         ARGS="${ARGS} --colabfold_num_seeds ${COLABFOLD_NUM_SEEDS}"
     fi
-    if [ -n "${COLABFOLD_RANDOM_SEED}" ]; then
-        ARGS="${ARGS} --colabfold_random_seed ${COLABFOLD_RANDOM_SEED}"
+    if [ -n "${RANDOM_SEED}" ]; then
+        ARGS="${ARGS} --colabfold_random_seed ${RANDOM_SEED}"
     fi
     if [ "${COLABFOLD_USE_DROPOUT}" == "true" ]; then
         ARGS="${ARGS} --colabfold_use_dropout"
