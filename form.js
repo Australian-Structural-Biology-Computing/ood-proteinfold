@@ -2,15 +2,17 @@
   const CONTEXT_PREFIX = "batch_connect_session_context";
   const COLABFOLD_ADVANCED_HIDE_TARGETS = [
     "colabfold_num_seeds",
-    "colabfold_random_seed",
     "colabfold_use_dropout",
-    "colabfold_max_seq",
-    "colabfold_max_extra_seq"
+    "colabfold_max_msa"
   ];
   const CHECKBOX_HIDE_RULES = {
     colabfold_advanced_options: {
       hideWhenChecked: new Set(),
       hideWhenUnchecked: new Set(COLABFOLD_ADVANCED_HIDE_TARGETS)
+    },
+    use_random_seed: {
+      hideWhenChecked: new Set(),
+      hideWhenUnchecked: new Set(["random_seed"])
     }
   };
 
@@ -198,10 +200,10 @@
       });
     };
 
-    controllers.forEach((select) => {
-      if (select.dataset.oodHideBound === "1") return;
-      select.addEventListener("change", evaluate);
-      select.dataset.oodHideBound = "1";
+    controllers.forEach((controller) => {
+      if (controller.dataset.oodHideBound === "1") return;
+      controller.addEventListener("change", evaluate);
+      controller.dataset.oodHideBound = "1";
     });
 
     evaluate();
