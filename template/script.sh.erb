@@ -295,7 +295,7 @@ if [ "<%= context.af_method %>" == "colabfold" ]; then
     ARGS="${ARGS} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER} --colabfold_model_preset ${prot_mode}"
 
     if [ -n "${COLABFOLD_RECYCLES}" ]; then
-        ARGS="${ARGS} --num_recycles_colabfold ${COLABFOLD_RECYCLES}"
+        ARGS="${ARGS} --colabfold_num_recycles ${COLABFOLD_RECYCLES}"
     fi
 
     COLABFOLD_BATCH_EXTRA_ARGS=""
