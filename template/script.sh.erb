@@ -222,6 +222,7 @@ if [ "${MODE}" == "FASTA_INPUT" ];
 then
     mkdir -p fasta
     cp "${user_input}" ./fasta/
+    dos2unix ./fasta/*
     create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
@@ -234,10 +235,11 @@ then
     for filename in *
     do
         echo "${filename}"
-        ln -s "$(pwd)/${filename}" "$working_dir/fasta/$(echo ${filename} | sed --expression='s/\s/\-/g')"
+        cp "$(pwd)/${filename}" "$working_dir/fasta/$(echo ${filename} | sed --expression='s/\s/\-/g')"
     done
 
     cd ${working_dir}
+    dos2unix ./fasta/*
     create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
