@@ -161,4 +161,38 @@
   document.addEventListener("DOMContentLoaded", initDynamicHide);
   document.addEventListener("turbo:load", initDynamicHide);
   document.addEventListener("page:load", initDynamicHide);
+
+  const initSaveIntermediatesWarning = () => {
+    const elements = getFieldElements('save_intermediates');
+    if (!elements || elements.length === 0) return;
+
+    let checkbox = null;
+    for (const el of elements) {
+      if (el.type === 'checkbox') { checkbox = el; break; }
+      const cb = el.querySelector && el.querySelector("input[type='checkbox']");
+      if (cb) { checkbox = cb; break; }
+    }
+
+    if (!checkbox) {
+      const fallback = document.querySelector("input[name$='[save_intermediates]'], input[name='save_intermediates']");
+      if (fallback && fallback.type === 'checkbox') checkbox = fallback;
+    }
+
+    if (!checkbox) return;
+
+    const warning = document.getElementById(`${CONTEXT_PREFIX}_save_intermediates_warning`) || document.getElementById('save_intermediates_warning');
+    if (!warning) return;
+
+    const update = () => {
+      if (checkbox.checked) warning.classList.remove('d-none');
+      else warning.classList.add('d-none');
+    };
+
+    checkbox.addEventListener('change', update);
+    update();
+  };
+
+  document.addEventListener("DOMContentLoaded", initSaveIntermediatesWarning);
+  document.addEventListener("turbo:load", initSaveIntermediatesWarning);
+  document.addEventListener("page:load", initSaveIntermediatesWarning);
 })();
