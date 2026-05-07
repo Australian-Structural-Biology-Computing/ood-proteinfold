@@ -10,10 +10,6 @@
       hideWhenChecked: new Set(),
       hideWhenUnchecked: new Set(COLABFOLD_ADVANCED_HIDE_TARGETS)
     },
-    use_random_seed: {
-      hideWhenChecked: new Set(),
-      hideWhenUnchecked: new Set(["random_seed"])
-    }
   };
 
   const escapeForSelector = (value) => {
@@ -246,4 +242,60 @@
   document.addEventListener("DOMContentLoaded", initSaveIntermediatesWarning);
   document.addEventListener("turbo:load", initSaveIntermediatesWarning);
   document.addEventListener("page:load", initSaveIntermediatesWarning);
+
+  const initColabfoldAdvancedEnforce = () => {
+    const advEls = getFieldElements('colabfold_advanced_options');
+    if (!advEls || advEls.length === 0) return;
+
+    let advCheckbox = null;
+    for (const el of advEls) {
+      if (el.type === 'checkbox') { advCheckbox = el; break; }
+      const cb = el.querySelector && el.querySelector("input[type='checkbox']");
+      if (cb) { advCheckbox = cb; break; }
+    }
+    if (!advCheckbox) return;
+
+    const saveEls = getFieldElements('save_intermediates');
+    if (!saveEls || saveEls.length === 0) return;
+
+    let saveCheckbox = null;
+    for (const el of saveEls) {
+      if (el.type === 'checkbox') { saveCheckbox = el; break; }
+      const cb = el.querySelector && el.querySelector("input[type='checkbox']");
+      if (cb) { saveCheckbox = cb; break; }
+    }
+    if (!saveCheckbox) return;
+
+    const enforcedNotice = document.getElementById('save_intermediates_enforced');
+    let prevChecked = saveCheckbox.checked;
+
+    const applyLock = () => {
+      prevChecked = saveCheckbox.checked;
+      saveCheckbox.checked = true;
+      saveCheckbox.disabled = true;
+      if (enforcedNotice) enforcedNotice.classList.remove('d-none');
+    };
+
+    const releaseLock = () => {
+      saveCheckbox.disabled = false;
+      saveCheckbox.checked = prevChecked;
+      if (enforcedNotice) enforcedNotice.classList.add('d-none');
+    };
+
+    const evaluate = () => {
+      if (advCheckbox.checked) applyLock(); else releaseLock();
+    };
+
+    if (advCheckbox.dataset.oodEnforceBound !== '1') {
+      advCheckbox.addEventListener('change', evaluate);
+      advCheckbox.dataset.oodEnforceBound = '1';
+    }
+
+    // run once to sync state
+    evaluate();
+  };
+
+  document.addEventListener("DOMContentLoaded", initColabfoldAdvancedEnforce);
+  document.addEventListener("turbo:load", initColabfoldAdvancedEnforce);
+  document.addEventListener("page:load", initColabfoldAdvancedEnforce);
 })();
