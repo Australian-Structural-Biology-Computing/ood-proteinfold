@@ -249,6 +249,7 @@ ARGS=""
 COLABFOLD_RECYCLES="<%= context.colabfold_num_recycles %>"
 ESMFOLD_RECYCLES="<%= context.esmfold_num_recycles %>"
 BOLTZ_USE_POTENTIALS="<%= context.boltz_use_potentials %>"
+SAVE_INTERMEDIATES="<%= context.save_intermediates %>"
 
 if [ "<%= context.full_dbs %>" == "full" ];
 then
@@ -291,6 +292,10 @@ if [ "<%= context.af_method %>" == "esmfold" ]; then
     if [ -n "${ESMFOLD_RECYCLES}" ]; then
         ARGS="${ARGS} --esmfold_num_recycles ${ESMFOLD_RECYCLES}"
     fi
+fi
+
+if [ "${SAVE_INTERMEDIATES}" == "true" ]; then
+    ARGS="${ARGS} --save_intermediates true"
 fi
 
 nextflow -c "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config" run ${REPOSITORY} -r ${BRANCH} -latest \
