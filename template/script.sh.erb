@@ -249,16 +249,17 @@ ARGS=""
 NEXTFLOW_CONFIG_ARGS=("-c" "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config")
 COLABFOLD_RECYCLES="<%= context.colabfold_num_recycles %>"
 COLABFOLD_NUM_SEEDS="<%= context.colabfold_num_seeds %>"
-USE_RANDOM_SEED="<%= context.use_random_seed %>"
-RANDOM_SEED=""
-if [ "${USE_RANDOM_SEED}" == "yes" ]; then
-    RANDOM_SEED="<%= context.random_seed %>"
-fi
+RANDOM_SEED="<%= context.random_seed %>"
 COLABFOLD_USE_DROPOUT="<%= context.colabfold_use_dropout %>"
 COLABFOLD_MAX_MSA="<%= context.colabfold_max_msa %>"
 ESMFOLD_RECYCLES="<%= context.esmfold_num_recycles %>"
 BOLTZ_USE_POTENTIALS="<%= context.boltz_use_potentials %>"
 SAVE_INTERMEDIATES="<%= context.save_intermediates %>"
+
+# If ColabFold advanced sampling is enabled, force saving intermediates
+if [ "<%= context.colabfold_advanced_options %>" == "yes" ]; then
+    SAVE_INTERMEDIATES="true"
+fi
 
 if [ "<%= context.full_dbs %>" == "full" ];
 then
