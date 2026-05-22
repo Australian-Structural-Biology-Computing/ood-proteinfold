@@ -55,10 +55,10 @@ PROJECT_ROOT=/srv/scratch/sbf-pipelines/proteinfold
 DB_PATH=/srv/scratch/sbf-pipelines/proteinfold/dbs
 
 # Git branch to use for proteinfold
-BRANCH=master
+BRANCH=v2.0.0
 
 # Repository path for using alternative versions of proteinfold
-REPOSITORY=Australian-Structural-Biology-Computing/proteinfold
+REPOSITORY=nf-core/proteinfold
 
 # Debug group for permissions on debug files
 DEBUGGROUP=sbf-pipelines
