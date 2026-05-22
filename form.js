@@ -255,6 +255,17 @@
     }
     if (!advCheckbox) return;
 
+    const methodEls = getFieldElements('af_method');
+    if (!methodEls || methodEls.length === 0) return;
+
+    let methodControl = null;
+    for (const el of methodEls) {
+      if (el.tagName === 'SELECT') { methodControl = el; break; }
+      if ((el.type === 'radio' || el.type === 'checkbox') && el.checked) { methodControl = el; break; }
+      if (el.type !== 'radio' && el.type !== 'checkbox') { methodControl = el; break; }
+    }
+    if (!methodControl) return;
+
     const saveEls = getFieldElements('save_intermediates');
     if (!saveEls || saveEls.length === 0) return;
 
@@ -267,10 +278,8 @@
     if (!saveCheckbox) return;
 
     const enforcedNotice = document.getElementById('save_intermediates_enforced');
-    let prevChecked = saveCheckbox.checked;
 
     const applyLock = () => {
-      prevChecked = saveCheckbox.checked;
       saveCheckbox.checked = true;
       saveCheckbox.disabled = true;
       if (enforcedNotice) enforcedNotice.classList.remove('d-none');
@@ -278,17 +287,22 @@
 
     const releaseLock = () => {
       saveCheckbox.disabled = false;
-      saveCheckbox.checked = prevChecked;
       if (enforcedNotice) enforcedNotice.classList.add('d-none');
     };
 
     const evaluate = () => {
-      if (advCheckbox.checked) applyLock(); else releaseLock();
+      const isColabfold = methodControl.value === 'colabfold';
+      if (advCheckbox.checked && isColabfold) applyLock(); else releaseLock();
     };
 
     if (advCheckbox.dataset.oodEnforceBound !== '1') {
       advCheckbox.addEventListener('change', evaluate);
       advCheckbox.dataset.oodEnforceBound = '1';
+    }
+
+    if (methodControl.dataset.oodEnforceBound !== '1') {
+      methodControl.addEventListener('change', evaluate);
+      methodControl.dataset.oodEnforceBound = '1';
     }
 
     // run once to sync state

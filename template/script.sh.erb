@@ -256,7 +256,8 @@ ESMFOLD_RECYCLES="<%= context.esmfold_num_recycles %>"
 BOLTZ_USE_POTENTIALS="<%= context.boltz_use_potentials %>"
 SAVE_INTERMEDIATES="<%= context.save_intermediates %>"
 
-# If ColabFold advanced sampling is enabled, force saving intermediates
+# UI enforces this when ColabFold advanced sampling is active, but keep the
+# server-side override as a fallback in case the form state is inconsistent.
 if [ "<%= context.colabfold_advanced_options %>" == "yes" ]; then
     SAVE_INTERMEDIATES="true"
 fi
