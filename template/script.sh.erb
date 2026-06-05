@@ -13,6 +13,8 @@ DB_PATH=${DB_PATH:-/srv/scratch/sbf-pipelines/proteinfold/dbs}
 BRANCH=${BRANCH:-2.0.0}
 REPOSITORY=${REPOSITORY:-nf-core/proteinfold}
 DEBUGGROUP=${DEBUGGROUP:-sbf}
+METRICS_DIRECTORY=${METRICS_DIRECTORY:-/srv/scratch/sbf-pipelines/metrics}
+ENABLE_METRICS=${ENABLE_METRICS:-true}
 
 PROTEINFOLD_VERSION_SELECTION="<%= context.proteinfold_version %>"
 case "${PROTEINFOLD_VERSION_SELECTION}" in
@@ -373,6 +375,29 @@ fi
 
 if [ "${SAVE_INTERMEDIATES}" == "true" ]; then
     ARGS="${ARGS} --save_intermediates true"
+fi
+
+if [[ "${ENABLE_METRICS}" == "true" ]]; then
+  # Write metrics before starting the run Create yyyy/mm directory to avoid large file count in one directory and to make collecting metrics by month easier.
+  METRICS_LOG_PATH="${METRICS_DIRECTORY}/$(date +%Y/%m)"
+  mkdir -p "${METRICS_LOG_PATH}"
+
+  # Write json file containing job metrics.
+  NF_CONFIG="${NEXTFLOW_CONFIG_ARGS[@]}"
+  jq -n \
+    --arg date "$(date +%Y-%m-%dT%H:%M:%SZ%z)" \
+    --arg user "$(whoami)" \
+    --arg node "$(hostname)" \
+    --arg pbs_jobid "${PBS_JOBID}" \
+    --arg mode "${PROT_MODE}" \
+    --arg repository "${REPOSITORY}" \
+    --arg branch "${BRANCH}" \
+    --arg input "${SAMPLESHEET}" \
+    --arg outdir "${OUT_DIR}" \
+    --arg nf_config "${NF_CONFIG}" \
+    --arg args "${ARGS}" \
+    '{date: $date, user: $user, node: $node, pbs_jobid: $pbs_jobid, mode: $mode, repository: $repository, branch: $branch, input: $input, outdir: $outdir, nf_config: $nf_config, args: $args}' > "${METRICS_LOG_PATH}/$(date +%Y-%m-%dT%H:%M:%SZ%z)-$(whoami)-${PBS_JOBID%.*}.json"
+ 
 fi
 
 nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run ${REPOSITORY} -r ${BRANCH} -latest \
