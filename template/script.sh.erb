@@ -397,7 +397,7 @@ if [[ "${ENABLE_METRICS}" == "true" ]]; then
     --arg nf_config "${NF_CONFIG}" \
     --arg args "${ARGS}" \
     '{date: $date, user: $user, node: $node, pbs_jobid: $pbs_jobid, mode: $mode, repository: $repository, branch: $branch, input: $input, outdir: $outdir, nf_config: $nf_config, args: $args}' > "${METRICS_LOG_PATH}/$(date +%Y-%m-%dT%H:%M:%SZ%z)-$(whoami)-${PBS_JOBID%.*}.json"
- 
+
 fi
 
 nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run ${REPOSITORY} -r ${BRANCH} -latest \
