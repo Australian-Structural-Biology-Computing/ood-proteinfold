@@ -292,9 +292,12 @@ fi
 
 if [ "<%= context.af_method %>" == "alphafold2" ]; then
     PROT_MODE="alphafold2"
-    ARGS="${ARGS} --alphafold2_db ${DB_PATH} --alphafold2_model_preset ${prot_mode} --alphafold2_full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
+    ARGS="${ARGS} --alphafold2_db ${DB_PATH} --alphafold2_full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
     if [ -n "${RANDOM_SEED}" ]; then
         ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
+    fi
+    if [ "${PROTEINFOLD_VERSION_SELECTION}" == "release" ] && [ -n "${prot_mode}" ]; then
+        ARGS="${ARGS} --alphafold2_model_preset ${prot_mode}"
     fi
 fi
 
