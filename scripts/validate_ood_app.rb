@@ -59,7 +59,8 @@ class TemplateContext
       colabfold_num_recycles: 3,
       esmfold_num_recycles: 4,
       boltz_use_potentials: "false",
-      msa_server: "local"
+      msa_server: "local",
+      proteinfold_version: "release"
     )
   end
 

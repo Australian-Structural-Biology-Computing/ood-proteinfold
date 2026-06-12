@@ -54,7 +54,7 @@ PROJECT_ROOT=/srv/scratch/sbf-pipelines/proteinfold
 # Database path for structure prediction modules
 DB_PATH=/srv/scratch/sbf-pipelines/proteinfold/dbs
 
-# Git branch to use for proteinfold
+# Git branch/tag to use for proteinfold
 BRANCH=v2.0.0
 
 # Repository path for using alternative versions of proteinfold

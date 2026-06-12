@@ -10,9 +10,25 @@ fi
 RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
 PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 DB_PATH=${DB_PATH:-/srv/scratch/sbf-pipelines/proteinfold/dbs}
-BRANCH=${BRANCH:-v2.0.0}
+BRANCH=${BRANCH:-2.0.0}
 REPOSITORY=${REPOSITORY:-nf-core/proteinfold}
 DEBUGGROUP=${DEBUGGROUP:-sbf}
+
+PROTEINFOLD_VERSION_SELECTION="<%= context.proteinfold_version %>"
+case "${PROTEINFOLD_VERSION_SELECTION}" in
+    dev)
+        REPOSITORY="Australian-Structural-Biology-Computing/proteinfold"
+        BRANCH="master"
+        PROTEINFOLD_VERSION="2.1.0dev"
+        ;;
+    release|*)
+        BRANCH="2.0.0"
+        PROTEINFOLD_VERSION="2.0.0"
+        ;;
+esac
+
+export BRANCH
+export PROTEINFOLD_VERSION
 
 set -xo pipefail
 set -eE
@@ -60,8 +76,6 @@ export NXF_APPTAINER_CACHEDIR="${NXF_APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.i
 export NXF_SINGULARITY_CACHEDIR="${NXF_SINGULARITY_CACHEDIR:-/srv/scratch/${USER}/.images}"
 export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
 export NXF_SINGULARITY_LIBRARYDIR="${NXF_SINGULARITY_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
-
-export PROTEINFOLD_VERSION="2.0.0dev"
 
 mkdir -p "${NXF_WORK}"
 
