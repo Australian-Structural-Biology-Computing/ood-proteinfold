@@ -93,6 +93,16 @@
     return fallback ? [fallback] : [];
   };
 
+  const getFieldControl = (fieldName, selector = "input, select, textarea") => {
+    const elements = getFieldElements(fieldName);
+    for (const element of elements) {
+      if (element.matches && element.matches(selector)) return element;
+      const nested = element.querySelector && element.querySelector(selector);
+      if (nested) return nested;
+    }
+    return null;
+  };
+
   const getFieldContainer = (element) => {
     if (!element) return null;
     const container = element.closest(".form-group, .mb-3, .form-item");
@@ -107,6 +117,52 @@
     return element.parentElement;
   };
 
+  const getFieldLabel = (element) => {
+    if (!element || !element.id) return null;
+    return document.querySelector(`label[for='${element.id}']`);
+  };
+
+  const getFieldCheckbox = (fieldName) => getFieldControl(fieldName, "input[type='checkbox']");
+
+  const isHelpSibling = (element) => {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
+    if (element.matches(".form-text, .help-block, .text-muted, small")) return true;
+
+    const className = element.className || "";
+    if (typeof className === "string" && /(help|hint|description|text-muted)/i.test(className)) {
+      return true;
+    }
+
+    return !element.querySelector("input, select, textarea, label");
+  };
+
+  const getVisibilityTargets = (element) => {
+    const targets = [];
+    const container = getFieldContainer(element);
+    if (container) targets.push(container);
+
+    const label = getFieldLabel(element);
+    if (label) {
+      targets.push(label);
+
+      let sibling = label.nextElementSibling;
+      while (sibling && isHelpSibling(sibling)) {
+        targets.push(sibling);
+        sibling = sibling.nextElementSibling;
+      }
+    }
+
+    if (container) {
+      let sibling = container.nextElementSibling;
+      while (sibling && isHelpSibling(sibling)) {
+        targets.push(sibling);
+        sibling = sibling.nextElementSibling;
+      }
+    }
+
+    return Array.from(new Set(targets));
+  };
+
   const setFieldVisibility = (fieldName, hidden) => {
     const elements = getFieldElements(fieldName);
     elements.forEach((element) => {
@@ -115,10 +171,10 @@
       const controls = [element, ...Array.from(scope.querySelectorAll("input, select, textarea"))]
         .filter((control, index, array) => array.indexOf(control) === index);
 
-      if (container) {
-        container.hidden = hidden;
-        container.setAttribute("aria-hidden", hidden ? "true" : "false");
-      }
+      getVisibilityTargets(element).forEach((target) => {
+        target.hidden = hidden;
+        target.setAttribute("aria-hidden", hidden ? "true" : "false");
+      });
 
       controls.forEach((control) => {
         if (hidden) {
@@ -191,6 +247,19 @@
         });
       });
 
+      const methodControl = getFieldControl("af_method", "select");
+      const advancedCheckbox = getFieldCheckbox("colabfold_advanced_options");
+      const showAdvancedColabfoldOptions =
+        methodControl &&
+        methodControl.value === "colabfold" &&
+        advancedCheckbox &&
+        advancedCheckbox.checked;
+
+      COLABFOLD_ADVANCED_HIDE_TARGETS.forEach((target) => {
+        const previous = fieldHiddenState.get(target) || false;
+        fieldHiddenState.set(target, previous || !showAdvancedColabfoldOptions);
+      });
+
       fieldHiddenState.forEach((hidden, fieldName) => {
         setFieldVisibility(fieldName, hidden);
       });
@@ -210,21 +279,7 @@
   document.addEventListener("page:load", initDynamicHide);
 
   const initSaveIntermediatesWarning = () => {
-    const elements = getFieldElements('save_intermediates');
-    if (!elements || elements.length === 0) return;
-
-    let checkbox = null;
-    for (const el of elements) {
-      if (el.type === 'checkbox') { checkbox = el; break; }
-      const cb = el.querySelector && el.querySelector("input[type='checkbox']");
-      if (cb) { checkbox = cb; break; }
-    }
-
-    if (!checkbox) {
-      const fallback = document.querySelector("input[name$='[save_intermediates]'], input[name='save_intermediates']");
-      if (fallback && fallback.type === 'checkbox') checkbox = fallback;
-    }
-
+    const checkbox = getFieldCheckbox('save_intermediates');
     if (!checkbox) return;
 
     const warning = document.getElementById(`${CONTEXT_PREFIX}_save_intermediates_warning`) || document.getElementById('save_intermediates_warning');
@@ -244,37 +299,13 @@
   document.addEventListener("page:load", initSaveIntermediatesWarning);
 
   const initColabfoldAdvancedEnforce = () => {
-    const advEls = getFieldElements('colabfold_advanced_options');
-    if (!advEls || advEls.length === 0) return;
-
-    let advCheckbox = null;
-    for (const el of advEls) {
-      if (el.type === 'checkbox') { advCheckbox = el; break; }
-      const cb = el.querySelector && el.querySelector("input[type='checkbox']");
-      if (cb) { advCheckbox = cb; break; }
-    }
+    const advCheckbox = getFieldCheckbox('colabfold_advanced_options');
     if (!advCheckbox) return;
 
-    const methodEls = getFieldElements('af_method');
-    if (!methodEls || methodEls.length === 0) return;
-
-    let methodControl = null;
-    for (const el of methodEls) {
-      if (el.tagName === 'SELECT') { methodControl = el; break; }
-      if ((el.type === 'radio' || el.type === 'checkbox') && el.checked) { methodControl = el; break; }
-      if (el.type !== 'radio' && el.type !== 'checkbox') { methodControl = el; break; }
-    }
+    const methodControl = getFieldControl('af_method', 'select');
     if (!methodControl) return;
 
-    const saveEls = getFieldElements('save_intermediates');
-    if (!saveEls || saveEls.length === 0) return;
-
-    let saveCheckbox = null;
-    for (const el of saveEls) {
-      if (el.type === 'checkbox') { saveCheckbox = el; break; }
-      const cb = el.querySelector && el.querySelector("input[type='checkbox']");
-      if (cb) { saveCheckbox = cb; break; }
-    }
+    const saveCheckbox = getFieldCheckbox('save_intermediates');
     if (!saveCheckbox) return;
 
     const enforcedNotice = document.getElementById('save_intermediates_enforced');
