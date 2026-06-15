@@ -34,14 +34,14 @@ attributes:
         widget: "select"
         label: "Proteinfold Version"
         help: |
-            Choose which ProteinFold branch to run.
+            Choose which ProteinFold version to run.
             <ul>
-                <li><b>Latest release (2.0.0)</b> Latest stable release.</li>
-                <li><b>Latest dev branch</b> Tracks the newest development changes.</li>
+                <li><b>Latest release version (2.0.0)</b> Stable release from nf-core.</li>
+                <li><b>Experimental version</b> Contains experimental features - Not yet thoroughly tested.</li>
             </ul>
         options:
             - ["Latest release (2.0.0)", "release"]
-            - ["Latest dev branch", "dev", {data-hide-prot_mode: true}]
+            - ["Experimental version", "dev", {data-hide-prot_mode: true}]
         display: true
 
     samplesheet:
