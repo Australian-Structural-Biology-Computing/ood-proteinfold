@@ -11,6 +11,24 @@
       hideWhenUnchecked: new Set(COLABFOLD_ADVANCED_HIDE_TARGETS)
     },
   };
+  const METHOD_TOKEN_LIMITS = {
+    boltz: {
+      title: "Boltz",
+      limit: "5,000"
+    },
+    alphafold2: {
+      title: "AlphaFold2",
+      limit: "4,000"
+    },
+    colabfold: {
+      title: "ColabFold",
+      limit: "4,000"
+    },
+    esmfold: {
+      title: "ESMFold",
+      limit: "600"
+    }
+  };
 
   const escapeForSelector = (value) => {
     if (window.CSS && typeof window.CSS.escape === "function") {
@@ -277,6 +295,51 @@
   document.addEventListener("DOMContentLoaded", initDynamicHide);
   document.addEventListener("turbo:load", initDynamicHide);
   document.addEventListener("page:load", initDynamicHide);
+
+  const initMethodTokenLimitPanel = () => {
+    const methodControl = getFieldControl("af_method", "select");
+    if (!methodControl) return;
+
+    const container = getFieldContainer(methodControl);
+    if (!container) return;
+
+    let panel = document.getElementById("af_method_token_limits_panel");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "af_method_token_limits_panel";
+      panel.className = "alert alert-info mt-2";
+      panel.setAttribute("role", "status");
+      panel.setAttribute("aria-live", "polite");
+      container.insertAdjacentElement("afterend", panel);
+    }
+
+    const update = () => {
+      const info = METHOD_TOKEN_LIMITS[methodControl.value];
+      if (!info) {
+        panel.hidden = true;
+        panel.innerHTML = "";
+        return;
+      }
+
+      const noteHtml = info.note ? `<div>${info.note}</div>` : "";
+      panel.innerHTML = `
+        ${info.title} approximate length limit: <strong>${info.limit}</strong>
+        ${noteHtml}
+      `;
+      panel.hidden = false;
+    };
+
+    if (methodControl.dataset.oodTokenPanelBound !== "1") {
+      methodControl.addEventListener("change", update);
+      methodControl.dataset.oodTokenPanelBound = "1";
+    }
+
+    update();
+  };
+
+  document.addEventListener("DOMContentLoaded", initMethodTokenLimitPanel);
+  document.addEventListener("turbo:load", initMethodTokenLimitPanel);
+  document.addEventListener("page:load", initMethodTokenLimitPanel);
 
   const initSaveIntermediatesWarning = () => {
     const checkbox = getFieldCheckbox('save_intermediates');
