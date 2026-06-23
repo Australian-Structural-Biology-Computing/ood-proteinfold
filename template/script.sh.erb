@@ -304,6 +304,9 @@ fi
 if [ "<%= context.af_method %>" == "boltz" ]; then
     PROT_MODE="boltz"
     ARGS="${ARGS} --boltz_db ${DB_PATH} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER}"
+    if [ -n "${RANDOM_SEED}" ]; then
+        ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
+    fi
     if [ "${BOLTZ_USE_POTENTIALS}" == "true" ]; then
         ARGS="${ARGS} --boltz_use_potentials true"
     fi
