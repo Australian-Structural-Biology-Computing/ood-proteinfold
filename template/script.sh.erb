@@ -269,6 +269,7 @@ COLABFOLD_MAX_MSA="<%= context.colabfold_max_msa %>"
 ESMFOLD_RECYCLES="<%= context.esmfold_num_recycles %>"
 BOLTZ_USE_POTENTIALS="<%= context.boltz_use_potentials %>"
 SAVE_INTERMEDIATES="<%= context.save_intermediates %>"
+AF3_WEIGHTS="<%= context.af3_weights %>"
 
 # UI enforces this when ColabFold advanced sampling is active, but keep the
 # server-side override as a fallback in case the form state is inconsistent.
@@ -310,6 +311,20 @@ if [ "<%= context.af_method %>" == "boltz" ]; then
     if [ "${BOLTZ_USE_POTENTIALS}" == "true" ]; then
         ARGS="${ARGS} --boltz_use_potentials true"
     fi
+fi
+
+if [ "<%= context.af_method %>" == "alphafold3" ]; then
+    if [ -z "${AF3_WEIGHTS}" ]; then
+        echo "ERROR: AlphaFold3 requires a path to user-provided weights."
+        exit 1
+    fi
+    if [ ! -r "${AF3_WEIGHTS}" ]; then
+        echo "ERROR: AlphaFold3 weights are not readable: ${AF3_WEIGHTS}"
+        exit 1
+    fi
+
+    PROT_MODE="alphafold3"
+    ARGS="${ARGS} --alphafold3_db ${DB_PATH} --alphafold3_params_path ${AF3_WEIGHTS}"
 fi
 
 if [ "<%= context.af_method %>" == "colabfold" ]; then
