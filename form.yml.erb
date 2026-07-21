@@ -5,6 +5,8 @@ form:
     - samplesheet_help
     - run_name
     - af_method
+    - af3_weights
+    - af3_warning
     - prot_mode
     - full_dbs
     - random_seed
@@ -74,15 +76,35 @@ attributes:
             <ul>
                 <li><b>Boltz</b> High accuracy, Faster; Open AlphaFold3 method - <a href="https://doi.org/10.1101/2024.11.19.624167">Paper-1</a> <a href="https://doi.org/10.1101/2025.06.14.659707">Paper-2</a></li>
                 <li><b>AlphaFold2.3</b> High accuracy, Slower - <a href="https://doi.org/10.1038/s41586-021-03819-2">Paper</a></li>
+                <li><b>AlphaFold3</b> High accuracy, Restricted use - <a href="https://doi.org/10.1038/s41586-024-07487-w">Paper</a></li>
                 <li><b>ColabFold</b> High accuracy - <a href="https://doi.org/10.1038/s41592-022-01488-1">Paper</a></li>
                 <li><b>ESMFold</b> Medium/Low accuracy, Fastest; No evolutionary sequence calculations - <a href="https://doi.org/10.1126/science.ade2574">Paper</a></li>
             </ul>
         options:
             - ["Boltz", "boltz", {data-hide-prot_mode: true, data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true}]
             - ["AlphaFold2", "alphafold2", {data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true}]
+            - ["AlphaFold3", "alphafold3", {data-hide-prot_mode: true, data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true}]
             - ["ColabFold", "colabfold", {data-hide-full_dbs: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true}]
             - ["ESMFold", "esmfold", {data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-boltz_use_potentials: true}]
         display: true
+
+    af3_weights:
+        widget: "path_selector"
+        label: "AlphaFold3 Weights"
+        placeholder: "Enter path to af3.bin"
+
+    af3_warning:
+        class: "d-none"
+        label: "AlphaFold3 Warning"
+        help: |
+            <div style="padding: 0.375rem 0.75rem; background-color: #FBEAEA; border: 2px solid #B42318; border-radius: 0.25rem; color: #7A271A;">
+              <p><b>Warning:</b> Users must provide their own weights to run AlphaFold3 predictions. Weights can be requested from Google DeepMind at <a style="color: #0033A0; text-decoration: underline; font-weight: 700;" href="https://github.com/google-deepmind/alphafold3?tab=readme-ov-file#obtaining-model-parameters">this link</a> and are available for restricted use. Please consult the <a style="color: #0033A0; text-decoration: underline; font-weight: 700;" href="https://github.com/google-deepmind/alphafold3/blob/main/WEIGHTS_TERMS_OF_USE.md">terms of use</a> and check with your PI to confirm that this is suitable for your use case.</p>
+              <p>AlphaFold3 can <b>NOT</b> be used for:</p>
+              <ul>
+                <li>Commercial projects.</li>
+                <li>Training ML models.</li>
+              </ul>
+            </div>
 
     prot_mode:
         widget: "select"

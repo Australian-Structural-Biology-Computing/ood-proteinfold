@@ -54,6 +54,7 @@ class TemplateContext
       boltz_min_ptm_interface: 0.5,
       samplesheet: "/tmp/samplesheet.csv",
       af_method: "colabfold",
+      af3_weights: "",
       prot_mode: "monomer_ptm",
       full_dbs: "reduced",
       colabfold_num_recycles: 3,
