@@ -318,7 +318,7 @@ if [ "<%= context.af_method %>" == "alphafold3" ]; then
         echo "ERROR: AlphaFold3 requires a path to user-provided weights."
         exit 1
     fi
-    if [ ! -r "${AF3_WEIGHTS}" ]; then
+    if [ ! -f "${AF3_WEIGHTS}" ] || [ ! -r "${AF3_WEIGHTS}" ]; then
         echo "ERROR: AlphaFold3 weights are not readable: ${AF3_WEIGHTS}"
         exit 1
     fi
