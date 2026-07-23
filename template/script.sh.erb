@@ -380,23 +380,24 @@ fi
 if [[ "${ENABLE_METRICS}" == "true" ]]; then
   # Write metrics before starting the run Create yyyy/mm directory to avoid large file count in one directory and to make collecting metrics by month easier.
   METRICS_LOG_PATH="${METRICS_DIRECTORY}/$(date +%Y/%m)"
-  mkdir -p "${METRICS_LOG_PATH}"
 
   # Write json file containing job metrics.
   NF_CONFIG="${NEXTFLOW_CONFIG_ARGS[@]}"
-  jq -n \
-    --arg date "$(date +%Y-%m-%dT%H:%M:%SZ%z)" \
-    --arg user "$(whoami)" \
-    --arg node "$(hostname)" \
-    --arg pbs_jobid "${PBS_JOBID}" \
-    --arg mode "${PROT_MODE}" \
-    --arg repository "${REPOSITORY}" \
-    --arg branch "${BRANCH}" \
-    --arg input "${SAMPLESHEET}" \
-    --arg outdir "${OUT_DIR}" \
-    --arg nf_config "${NF_CONFIG}" \
-    --arg args "${ARGS}" \
-    '{date: $date, user: $user, node: $node, pbs_jobid: $pbs_jobid, mode: $mode, repository: $repository, branch: $branch, input: $input, outdir: $outdir, nf_config: $nf_config, args: $args}' > "${METRICS_LOG_PATH}/$(date +%Y-%m-%dT%H:%M:%SZ%z)-$(whoami)-${PBS_JOBID%.*}.json"
+  if ! mkdir -p "${METRICS_LOG_PATH}" || ! jq -n \
+      --arg date "$(date +%Y-%m-%dT%H:%M:%SZ%z)" \
+      --arg user "$(whoami)" \
+      --arg node "$(hostname)" \
+      --arg pbs_jobid "${PBS_JOBID}" \
+      --arg mode "${PROT_MODE}" \
+      --arg repository "${REPOSITORY}" \
+      --arg branch "${BRANCH}" \
+      --arg input "${SAMPLESHEET}" \
+      --arg outdir "${OUT_DIR}" \
+      --arg nf_config "${NF_CONFIG}" \
+      --arg args "${ARGS}" \
+      '{date: $date, user: $user, node: $node, pbs_jobid: $pbs_jobid, mode: $mode, repository: $repository, branch: $branch, input: $input, outdir: $outdir, nf_config: $nf_config, args: $args}' > "${METRICS_LOG_PATH}/$(date +%Y-%m-%dT%H:%M:%SZ%z)-$(whoami)-${PBS_JOBID%.*}.json"; then
+    echo "Warning: unable to write metrics log to ${METRICS_LOG_PATH}; continuing without metrics." >&2
+  fi
 
 fi
 
