@@ -23,22 +23,21 @@ jobs:
       SSH_USER: ${{ secrets.USER }}
       APP_PATH: ${{ secrets.APP_PATH }}
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4.2.2
-
       - name: Set deployment target
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
             echo "DEPLOY_TARGET=${APP_PATH}/prod/kod-proteinfold" >> "${GITHUB_ENV}"
             echo "DEPLOY_LABEL=production" >> "${GITHUB_ENV}"
+            echo "DEPLOY_REF=refs/tags/${{ github.event.release.tag_name }}" >> "${GITHUB_ENV}"
           else
             echo "DEPLOY_TARGET=${APP_PATH}/dev" >> "${GITHUB_ENV}"
             echo "DEPLOY_LABEL=development" >> "${GITHUB_ENV}"
+            echo "DEPLOY_REF=origin/master" >> "${GITHUB_ENV}"
           fi
 
       - name: Validate deployment inputs
         run: |
-          for required in SSH_HOST SSH_USER APP_PATH DEPLOY_TARGET; do
+          for required in SSH_HOST SSH_USER APP_PATH DEPLOY_TARGET DEPLOY_REF; do
             if [ -z "${!required:-}" ]; then
               echo "Missing required value: ${required}" >&2
               exit 1
@@ -55,19 +54,11 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H -p 22 "${SSH_HOST}" >> ~/.ssh/known_hosts
 
-      - name: Ensure remote target exists
+      - name: Deploy Git revision
         run: |
-          ssh "${SSH_USER}@${SSH_HOST}" "mkdir -p '${DEPLOY_TARGET}'"
-
-      - name: Deploy app files
-        run: |
-          rsync -avz --delete \
-            --exclude ".git/" \
-            --exclude ".github/" \
-            --exclude ".pre-commit-config.yaml" \
-            --exclude "template/.env" \
-            ./ "${SSH_USER}@${SSH_HOST}:${DEPLOY_TARGET}/"
+          deploy_command=$(printf 'ood-proteinfold-deploy %q %q' "${DEPLOY_TARGET}" "${DEPLOY_REF}")
+          ssh "${SSH_USER}@${SSH_HOST}" "${deploy_command}"
 
       - name: Report deployment target
         run: |
-          echo "Deployed ${DEPLOY_LABEL} to ${DEPLOY_TARGET}"
+          echo "Deployed ${DEPLOY_LABEL} (${DEPLOY_REF}) to ${DEPLOY_TARGET}"
