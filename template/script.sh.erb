@@ -127,117 +127,11 @@ print("".join(char for char in sys.stdin.read() if not char.isspace() and char n
 ' <<< "$1"
 }
 
-function sanitize_input() {
-    if ! python3 - "$@" <<'PY'
-import csv
-import os
-import sys
-import tempfile
-
-def strip_whitespace(value):
-    return "".join(char for char in value if not char.isspace() and char not in {"\ufeff", "\u200b"})
-
-def sanitize_fasta(source_path, destination_path):
-    has_record = False
-    record_has_content = False
-
-    with open(source_path, encoding="utf-8-sig") as source, open(destination_path, "w", encoding="utf-8") as destination:
-        for line_number, raw_line in enumerate(source, start=1):
-            line = raw_line.strip()
-            if not line:
-                continue
-            if line.startswith(">"):
-                if has_record and not record_has_content:
-                    raise ValueError(f"FASTA record before line {line_number} has no sequence/content")
-                header = line[1:].strip()
-                if not header:
-                    raise ValueError(f"FASTA header on line {line_number} is empty")
-                destination.write(f">{header}\n")
-                has_record = True
-                record_has_content = False
-                continue
-            if not has_record:
-                raise ValueError(f"Sequence/content found before the first FASTA header on line {line_number}")
-            sequence = strip_whitespace(raw_line)
-            if sequence:
-                destination.write(f"{sequence}\n")
-                record_has_content = True
-
-    if not has_record:
-        raise ValueError("No FASTA header found")
-    if not record_has_content:
-        raise ValueError("Final FASTA record has no sequence/content")
-
-def sanitize_in_place(path):
-    with tempfile.NamedTemporaryFile(dir=os.path.dirname(path), delete=False) as temporary:
-        temporary_path = temporary.name
-    try:
-        sanitize_fasta(path, temporary_path)
-        os.replace(temporary_path, path)
-    except BaseException:
-        os.unlink(temporary_path)
-        raise
-
-def sanitize_samplesheet(samplesheet_path, output_path, fasta_dir):
-    os.makedirs(fasta_dir, exist_ok=True)
-    samplesheet_dir = os.path.dirname(os.path.abspath(samplesheet_path))
-    with open(samplesheet_path, encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        fieldnames = reader.fieldnames or []
-        if [name.strip() for name in fieldnames[:2]] != ["id", "fasta"]:
-            raise ValueError("Samplesheet must start with the required columns: id,fasta")
-
-        fasta_column = fieldnames[1]
-        rows = []
-
-        for index, row in enumerate(reader, start=2):
-            if all((value or "").strip() == "" for value in row.values()):
-                continue
-
-            fasta_path = (row.get(fasta_column) or "").strip()
-            if not fasta_path:
-                raise ValueError(f"Samplesheet row {index} is missing a FASTA path")
-            if not os.path.isabs(fasta_path):
-                fasta_path = os.path.normpath(os.path.join(samplesheet_dir, fasta_path))
-            if not os.path.isfile(fasta_path):
-                raise ValueError(f"Samplesheet row {index} FASTA file not found: {fasta_path}")
-
-            sanitized_path = os.path.join(fasta_dir, f"{index}_{os.path.basename(fasta_path)}")
-            try:
-                sanitize_fasta(fasta_path, sanitized_path)
-            except (OSError, UnicodeError, ValueError) as error:
-                raise ValueError(f"Samplesheet row {index} has invalid FASTA input: {error}")
-
-            row[fasta_column] = sanitized_path
-            rows.append(row)
-
-    if not rows:
-        raise ValueError("Samplesheet does not contain any data rows")
-
-    with open(output_path, "w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-
-command, *arguments = sys.argv[1:]
-if command == "directory":
-    directory, required = arguments
-    fasta_files = [
-        entry.path for entry in os.scandir(directory)
-        if entry.is_file() and entry.name.lower().endswith((".fa", ".fasta"))
-    ]
-    if required == "true" and not fasta_files:
-        raise ValueError(f"No FASTA files were found in {directory}")
-    for fasta_file in fasta_files:
-        sanitize_in_place(fasta_file)
-elif command == "samplesheet":
-    sanitize_samplesheet(*arguments)
-else:
-    raise ValueError(f"Unknown sanitization input: {command}")
-PY
-    then
-        echo "ERROR: Unable to sanitize input"
-        exit 1
+function sanitise_input() {
+    if ! python3 ./sanitise_input.py "$@"; then
+        echo "WARNING: Input sanitisation failed; continuing with the original input." >&2
+        printf '%s\n' "WARNING: Input sanitisation failed; continuing with the original input." >> "$(pwd)/WARNING.txt"
+        return 1
     fi
 }
 
@@ -253,6 +147,9 @@ MODE=""
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
 if [ "${MODE}" == "MANUAL_INPUT" ]; then
+    if [ "${raw_user_input}" != "${sequence_input}" ]; then
+        echo "WARNING: Removed whitespace from manual sequence input" | tee "$(pwd)/WARNING.txt" >&2
+    fi
     user_input="${sequence_input}"
 fi
 
@@ -265,15 +162,6 @@ af_method="<%= context.af_method %>"
 if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input}" =~ \.(yaml|yml)$ ]]; then
     if [ "${af_method}" != "boltz" ]; then
         echo "ERROR: YAML/YML input files are only supported by Boltz."
-        echo "Current method: ${af_method}"
-        exit 1
-    fi
-fi
-
-# Check JSON compatibility - only supported by HelixFold3
-if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input}" =~ \.json$ ]]; then
-    if [ "${af_method}" != "helixfold3" ]; then
-        echo "ERROR: JSON input files are only supported by the HelixFold3 method."
         echo "Current method: ${af_method}"
         exit 1
     fi
@@ -359,8 +247,11 @@ fi
 
 if [ "${MODE}" == "SAMPLESHEET_INPUT" ];
 then
-    sanitize_input samplesheet "${user_input}" "$(pwd)/sanitized_samplesheet.csv" "$(pwd)/fasta/samplesheet_inputs"
-    SAMPLESHEET="$(pwd)/sanitized_samplesheet.csv"
+    if sanitise_input samplesheet "${user_input}" "$(pwd)/sanitised_samplesheet.csv" "$(pwd)/fasta/samplesheet_inputs" "$(pwd)/WARNING.txt" "${af_method}"; then
+        SAMPLESHEET="$(pwd)/sanitised_samplesheet.csv"
+    else
+        SAMPLESHEET="${user_input}"
+    fi
 fi
 
 if [ "${MODE}" == "FASTA_INPUT" ];
@@ -369,7 +260,7 @@ then
     cp "${user_input}" ./fasta/
     dos2unix ./fasta/*
     if [[ "${user_input}" =~ \.fa(sta)?$ ]]; then
-        sanitize_input directory "./fasta" "true"
+        sanitise_input directory "./fasta" "true" "$(pwd)/WARNING.txt" || true
     fi
     create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
@@ -388,9 +279,13 @@ then
 
     cd ${working_dir}
     dos2unix ./fasta/*
-    sanitize_input directory "./fasta" "false"
+    sanitise_input directory "./fasta" "false" "$(pwd)/WARNING.txt" || true
     create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
+fi
+
+if [ -f "$(pwd)/WARNING.txt" ]; then
+    cp "$(pwd)/WARNING.txt" "${OUT_DIR}/WARNING.txt"
 fi
 
 PROT_MODE=""

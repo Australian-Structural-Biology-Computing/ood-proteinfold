@@ -20,6 +20,7 @@
 
 - `form.yml.erb`: Defines the web form and input parameters.
 - `template/script.sh.erb`: Main job script for running predictions.
+- `template/sanitise_input.py`: Validates and normalises staged FASTA and samplesheet inputs.
 - `submit.yml.erb`: Job submission configuration.
 - `info.html.erb`: Displays result links after job completion.
 - `.github/workflows/`: CI/CD deployment workflows.

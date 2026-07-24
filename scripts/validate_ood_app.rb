@@ -16,6 +16,7 @@ REQUIRED_FILES = %w[
   info.html.erb
   view.html.erb
   template/script.sh.erb
+  template/sanitise_input.py
 ].freeze
 
 class TemplateContext
@@ -129,6 +130,20 @@ def validate_shell_templates!(template_context)
   end
 end
 
+def validate_python_templates!
+  Dir.glob(ROOT.join("template/*.py")).sort.each do |path|
+    source = File.read(path)
+    _stdout, stderr, status = Open3.capture3(
+      "python3", "-c", "import sys; compile(sys.stdin.read(), sys.argv[1], 'exec')", path.to_s,
+      stdin_data: source
+    )
+    next if status.success?
+
+    relative_path = Pathname(path).relative_path_from(ROOT)
+    abort("Python validation failed for #{relative_path}: #{stderr.strip}")
+  end
+end
+
 assert_required_files!
 validate_manifest!
 
@@ -137,5 +152,6 @@ erb_templates.each { |path| compile_erb!(path) }
 validate_yaml_file!("form.yml.erb", template_context)
 validate_yaml_file!("submit.yml.erb", template_context)
 validate_shell_templates!(template_context)
+validate_python_templates!
 
 puts "Open OnDemand app validation passed for #{ROOT.basename}"

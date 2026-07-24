@@ -25,7 +25,7 @@ def tail_text(path, max_bytes = 8192, max_lines = 10)
   end
 end
 
-def sanitize_live_log(text)
+def sanitise_live_log(text)
   return nil if text.nil?
 
   ansi_pattern = /\e\[[0-9;?]*[ -\/]*[@-~]/
@@ -69,7 +69,7 @@ def sanitize_live_log(text)
   compact.join("\n").strip
 end
 
-def sanitize_output_log(text)
+def sanitise_output_log(text)
   return nil if text.nil?
 
   lines = text.split("\n")
@@ -116,9 +116,9 @@ output_log_url = file_url(results_url_base, output_log_path)
 summary_log_url = File.file?(output_log_path) ? output_log_url : live_log_url
 summary_log_label = File.file?(output_log_path) ? "output.log" : "live_log.log"
 log_text = if File.file?(output_log_path)
-  sanitize_output_log(tail_text(output_log_path, 16384, 40))
+  sanitise_output_log(tail_text(output_log_path, 16384, 40))
 else
-  sanitize_live_log(tail_text(live_log_path))
+  sanitise_live_log(tail_text(live_log_path))
 end
 %>
 <div class="ood-completed-log-card">

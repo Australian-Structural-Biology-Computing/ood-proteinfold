@@ -43,8 +43,8 @@
 
   const parseTruthy = (value) => {
     if (value === null || value === undefined) return false;
-    const normalized = String(value).trim().toLowerCase();
-    return normalized === "" || normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
+    const normalised = String(value).trim().toLowerCase();
+    return normalised === "" || normalised === "true" || normalised === "1" || normalised === "yes" || normalised === "on";
   };
 
   const hasHideAttribute = (element) =>
