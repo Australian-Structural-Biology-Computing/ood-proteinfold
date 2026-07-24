@@ -119,14 +119,39 @@ function convert_colon_delimited_to_fasta() {
     fi
 }
 
+function strip_all_whitespace() {
+    python3 -c '
+import sys
+
+print("".join(char for char in sys.stdin.read() if not char.isspace() and char not in {"\ufeff", "\u200b"}), end="")
+' <<< "$1"
+}
+
+function sanitise_input() {
+    if ! python3 ./sanitise_input.py "$@"; then
+        echo "WARNING: Input sanitisation failed; continuing with the original input." >&2
+        printf '%s\n' "WARNING: Input sanitisation failed; continuing with the original input." >> "$(pwd)/WARNING.txt"
+        return 1
+    fi
+}
+
 # Check if the input is an amino acid sequence or a path
-user_input="<%= context.samplesheet %>"
+raw_user_input="<%= context.samplesheet %>"
+user_input="$(printf '%s' "${raw_user_input}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+sequence_input="$(strip_all_whitespace "${user_input}")"
 
 MODE=""
-[[ "${user_input}" =~ ^[\ A-Z:\*\-]*$ ]] && MODE="MANUAL_INPUT"
+[[ "${sequence_input}" =~ ^[A-Z:\*\-]+$ ]] && MODE="MANUAL_INPUT"
 [[ "${user_input}" =~ ^.*\.csv$ ]] && MODE="SAMPLESHEET_INPUT"
 [[ "${user_input}" =~ \.(fa(sta)?|y(a)?ml)$ ]] && MODE="FASTA_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
+
+if [ "${MODE}" == "MANUAL_INPUT" ]; then
+    if [ "${raw_user_input}" != "${sequence_input}" ]; then
+        echo "WARNING: Removed whitespace from manual sequence input" | tee "$(pwd)/WARNING.txt" >&2
+    fi
+    user_input="${sequence_input}"
+fi
 
 echo "${MODE}"
 
@@ -137,15 +162,6 @@ af_method="<%= context.af_method %>"
 if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input}" =~ \.(yaml|yml)$ ]]; then
     if [ "${af_method}" != "boltz" ]; then
         echo "ERROR: YAML/YML input files are only supported by Boltz."
-        echo "Current method: ${af_method}"
-        exit 1
-    fi
-fi
-
-# Check JSON compatibility - only supported by HelixFold3
-if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input}" =~ \.json$ ]]; then
-    if [ "${af_method}" != "helixfold3" ]; then
-        echo "ERROR: JSON input files are only supported by the HelixFold3 method."
         echo "Current method: ${af_method}"
         exit 1
     fi
@@ -231,7 +247,11 @@ fi
 
 if [ "${MODE}" == "SAMPLESHEET_INPUT" ];
 then
-    SAMPLESHEET="${user_input}"
+    if sanitise_input samplesheet "${user_input}" "$(pwd)/sanitised_samplesheet.csv" "$(pwd)/fasta/samplesheet_inputs" "$(pwd)/WARNING.txt" "${af_method}"; then
+        SAMPLESHEET="$(pwd)/sanitised_samplesheet.csv"
+    else
+        SAMPLESHEET="${user_input}"
+    fi
 fi
 
 if [ "${MODE}" == "FASTA_INPUT" ];
@@ -239,6 +259,9 @@ then
     mkdir -p fasta
     cp "${user_input}" ./fasta/
     dos2unix ./fasta/*
+    if [[ "${user_input}" =~ \.fa(sta)?$ ]]; then
+        sanitise_input directory "./fasta" "true" "$(pwd)/WARNING.txt" || true
+    fi
     create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
@@ -256,8 +279,13 @@ then
 
     cd ${working_dir}
     dos2unix ./fasta/*
+    sanitise_input directory "./fasta" "false" "$(pwd)/WARNING.txt" || true
     create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
+fi
+
+if [ -f "$(pwd)/WARNING.txt" ]; then
+    cp "$(pwd)/WARNING.txt" "${OUT_DIR}/WARNING.txt"
 fi
 
 PROT_MODE=""

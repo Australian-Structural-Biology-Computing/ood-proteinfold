@@ -24,7 +24,7 @@ def tail_text(path, max_bytes = 65536, max_lines = 120)
   end
 end
 
-def sanitize_live_log(text)
+def sanitise_live_log(text)
   return nil if text.nil?
 
   ansi_pattern = /\e\[[0-9;?]*[ -\/]*[@-~]/
@@ -100,7 +100,7 @@ results_base = (defined?(results_url_base) && results_url_base && !results_url_b
 log_dir = (defined?(session_output_dir) && session_output_dir && !session_output_dir.to_s.empty?) ? session_output_dir.to_s : File.join(base_dir, run_dir.to_s)
 log_path = File.join(log_dir, "live_log.log")
 log_url = file_url(results_base, log_path)
-log_text = sanitize_live_log(tail_text(log_path))
+log_text = sanitise_live_log(tail_text(log_path))
 %>
 <div class="ood-appkit markdown">
   <div class="ood-live-log-card">
