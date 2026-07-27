@@ -25,44 +25,22 @@ class TemplateContext
   def initialize
     @context = OpenStruct.new(
       run_name: "ci_run",
-      query_fasta: "/tmp/query.fasta",
-      target_fasta: "/tmp/target.fasta",
-      workflow: "proteindj",
-      target: "/tmp/target.pdb",
-      target_chain: "A",
-      hotspots: "10,20,30",
-      minlen: 60,
-      maxlen: 100,
-      ndesigns: 10,
-      seqs_per_design: 4,
-      pdj_seq_method: "mpnn",
-      pdj_pred_method: "boltz",
-      mpnn_relax_max_cycles: 1,
-      uncropped_target_pdb: "",
-      boltz_use_templates: "false",
-      boltz_input_msa: "",
-      fold_min_ss: 3,
-      seq_min_ext_coef: 1000,
-      max_designs: 10,
-      max_seqs_per_fold: 2,
-      af2_max_pae_interaction: 10,
-      af2_min_plddt_overall: 70,
-      af2_max_rmsd_binder_bndaln: 2,
-      af2_max_rmsd_binder_tgtaln: 2,
-      boltz_max_rmsd_binder: 2,
-      boltz_max_rmsd_target: 2,
-      boltz_max_rmsd_overall: 2,
-      boltz_min_ptm_interface: 0.5,
       samplesheet: "/tmp/samplesheet.csv",
       af_method: "colabfold",
       af3_weights: "",
       prot_mode: "monomer_ptm",
       full_dbs: "reduced",
       colabfold_num_recycles: 3,
+      colabfold_advanced_options: "",
+      colabfold_max_msa: "512:1024",
+      colabfold_num_seeds: 1,
+      colabfold_use_dropout: "false",
       esmfold_num_recycles: 4,
       boltz_use_potentials: "false",
       msa_server: "local",
-      proteinfold_version: "release"
+      proteinfold_version: "release",
+      random_seed: "",
+      save_intermediates: "false"
     )
   end
 
@@ -70,14 +48,8 @@ class TemplateContext
     run_name = "ci_run"
     af_method = "colabfold"
     msa_server = "local"
-    workflow = "proteindj"
     email = "ci@example.com"
     email_on_terminated = false
-    base_out_dir = "/tmp/ood-results"
-    results_url_base = "/pun/sys/dashboard/files/fs"
-    run_dir = "ci_run"
-    user = "ci-user"
-    session_output_dir = "/tmp/ood-session"
     context = @context
     binding
   end
