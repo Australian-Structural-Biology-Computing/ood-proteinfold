@@ -27,7 +27,9 @@ def sanitise_fasta(source_path, destination_path):
     normalised_sequence_lines = 0
     normalised_line_endings = 0
     removed_sequence_whitespace = 0
+    # Hash ordered record sequences, excluding headers and sequence line wrapping.
     digest = hashlib.sha256()
+    record_digest = None
 
     with open(source_path, encoding="utf-8-sig", newline="") as source, open(
         destination_path, "w", encoding="utf-8"
@@ -35,7 +37,6 @@ def sanitise_fasta(source_path, destination_path):
 
         def write(value):
             destination.write(value)
-            digest.update(value.encode("utf-8"))
 
         for line_number, raw_line in enumerate(source, start=1):
             if raw_line.endswith("\r\n") or raw_line.endswith("\r"):
@@ -55,6 +56,9 @@ def sanitise_fasta(source_path, destination_path):
                 normalised_header = f">{header}\n"
                 if raw_line != normalised_header:
                     normalised_headers += 1
+                if record_digest is not None:
+                    digest.update(record_digest.digest())
+                record_digest = hashlib.sha256()
                 write(normalised_header)
                 has_record = True
                 record_has_content = False
@@ -69,6 +73,7 @@ def sanitise_fasta(source_path, destination_path):
                 if raw_line != normalised_sequence:
                     normalised_sequence_lines += 1
                     removed_sequence_whitespace += len(raw_line.rstrip("\r\n")) - len(sequence)
+                record_digest.update(sequence.encode("utf-8"))
                 write(normalised_sequence)
                 record_has_content = True
 
@@ -76,6 +81,7 @@ def sanitise_fasta(source_path, destination_path):
         raise ValueError("No FASTA header found")
     if not record_has_content:
         raise ValueError("Final FASTA record has no sequence/content")
+    digest.update(record_digest.digest())
 
     changes = []
     if blank_lines:
@@ -224,15 +230,12 @@ def sanitise_samplesheet(samplesheet_path, output_path, input_dir, warning_path,
     write_warnings(warning_path, warnings)
 
 
-def sanitise_directory(directory, required, warning_path):
+def sanitise_directory(directory, warning_path):
     fasta_files = [
         entry.path
         for entry in os.scandir(directory)
         if entry.is_file() and entry.name.lower().endswith(FASTA_SUFFIXES)
     ]
-    if required and not fasta_files:
-        raise ValueError(f"No FASTA files were found in {directory}")
-
     warnings = []
     seen_normalised_hashes = {}
     for fasta_file in fasta_files:
@@ -252,9 +255,8 @@ def sanitise_directory(directory, required, warning_path):
 
 def main():
     command, *arguments = sys.argv[1:]
-    if command == "directory" and len(arguments) == 3:
-        directory, required, warning_path = arguments
-        sanitise_directory(directory, required == "true", warning_path)
+    if command == "directory" and len(arguments) == 2:
+        sanitise_directory(*arguments)
     elif command == "samplesheet" and len(arguments) == 5:
         sanitise_samplesheet(*arguments)
     else:

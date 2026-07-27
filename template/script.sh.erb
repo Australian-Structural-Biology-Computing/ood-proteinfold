@@ -260,7 +260,7 @@ then
     cp "${user_input}" ./fasta/
     dos2unix ./fasta/*
     if [[ "${user_input}" =~ \.fa(sta)?$ ]]; then
-        sanitise_input directory "./fasta" "true" "$(pwd)/WARNING.txt" || true
+        sanitise_input directory "./fasta" "$(pwd)/WARNING.txt" || true
     fi
     create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
@@ -279,7 +279,7 @@ then
 
     cd ${working_dir}
     dos2unix ./fasta/*
-    sanitise_input directory "./fasta" "false" "$(pwd)/WARNING.txt" || true
+    sanitise_input directory "./fasta" "$(pwd)/WARNING.txt" || true
     create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     SAMPLESHEET="$(pwd)/samplesheet.csv"
 fi
