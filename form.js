@@ -427,4 +427,310 @@
   document.addEventListener("DOMContentLoaded", initColabfoldAdvancedEnforce);
   document.addEventListener("turbo:load", initColabfoldAdvancedEnforce);
   document.addEventListener("page:load", initColabfoldAdvancedEnforce);
+
+  const initInputPreflight = () => {
+    const input = getFieldControl("samplesheet");
+    if (!input) return;
+
+    const urlTemplate = "/pun/sys/dashboard/files/fs/__PATH_SEGMENTS__";
+    const fieldContainer = getFieldContainer(input);
+    let marker = document.getElementById("ood-proteinfold-input-warning");
+    let summary = document.getElementById("ood-proteinfold-input-warning-summary");
+
+    if (!marker) {
+      marker = document.createElement("button");
+      marker.id = "ood-proteinfold-input-warning";
+      marker.type = "button";
+      marker.textContent = "!";
+      marker.hidden = true;
+      marker.setAttribute("aria-label", "Input warnings");
+      marker.style.cssText = "margin-left: 0.5rem; border: 0; border-radius: 50%; width: 1.4rem; height: 1.4rem; padding: 0; background: #ffc107; color: #212529; font-weight: 700; cursor: help;";
+      input.insertAdjacentElement("afterend", marker);
+    }
+
+    if (!summary) {
+      summary = document.createElement("div");
+      summary.id = "ood-proteinfold-input-warning-summary";
+      summary.hidden = true;
+      summary.className = "alert alert-warning";
+      summary.setAttribute("role", "alert");
+      summary.style.marginTop = "0.5rem";
+      marker.insertAdjacentElement("afterend", summary);
+    }
+
+    const buildFilesUrl = (path) => {
+      const withoutLeadingSlash = path.replace(/^\/+/, "");
+      const segments = withoutLeadingSlash
+        .split("/")
+        .filter(Boolean)
+        .map(encodeURIComponent)
+        .join("/");
+      return urlTemplate.replace(/__PATH_SEGMENTS__/g, segments);
+    };
+
+    const isFastaPath = (path) => /\.fa(?:sta)?$/i.test(path);
+    const isSymbolicLink = (mode) => {
+      const values = [Number(mode)];
+      if (typeof mode === "string" && /^[0-7]+$/.test(mode)) {
+        values.push(Number.parseInt(mode, 8));
+      }
+      return values.some((value) => (value & 0o170000) === 0o120000);
+    };
+
+    const parseFasta = (contents, label) => {
+      const records = [];
+      let sequence = "";
+      let hasHeader = false;
+      let blankLines = 0;
+      let normalisedHeaders = 0;
+      let normalisedSequenceLines = 0;
+      let normalisedLineEndings = 0;
+      let removedSequenceWhitespace = 0;
+      const linePattern = /([^\r\n]*)(\r\n|\r|\n|$)/g;
+
+      while (linePattern.lastIndex < contents.length) {
+        const match = linePattern.exec(contents);
+        if (!match) break;
+        const rawText = match[1];
+        const ending = match[2];
+        const rawLine = `${rawText}${ending}`;
+        if (ending === "\r\n" || ending === "\r") normalisedLineEndings += 1;
+        const line = rawLine.trim();
+        if (!line) {
+          blankLines += 1;
+          continue;
+        }
+        if (line.startsWith(">")) {
+          if (hasHeader && !sequence) {
+            throw new Error(`${label} has a FASTA record with no sequence.`);
+          }
+          if (!line.slice(1).trim()) {
+            throw new Error(`${label} has an empty FASTA header.`);
+          }
+          if (hasHeader) records.push(sequence);
+          if (rawLine !== `>${line.slice(1).trim()}\n`) normalisedHeaders += 1;
+          hasHeader = true;
+          sequence = "";
+          continue;
+        }
+        if (!hasHeader) {
+          throw new Error(`${label} contains sequence data before its first FASTA header.`);
+        }
+        const normalisedSequence = rawLine.replace(/[\s\uFEFF\u200B]/gu, "");
+        if (normalisedSequence) {
+          if (rawLine !== `${normalisedSequence}\n`) {
+            normalisedSequenceLines += 1;
+            removedSequenceWhitespace += rawText.length - normalisedSequence.length;
+          }
+          sequence += normalisedSequence;
+        }
+      }
+
+      if (!hasHeader) throw new Error(`${label} has no FASTA header.`);
+      if (!sequence) throw new Error(`${label} has a final FASTA record with no sequence.`);
+      records.push(sequence);
+      const changes = [];
+      if (blankLines) changes.push(`remove ${blankLines} blank line(s)`);
+      if (normalisedLineEndings) changes.push(`standardise line endings in ${normalisedLineEndings} line(s)`);
+      if (normalisedHeaders) changes.push(`tidy ${normalisedHeaders} FASTA header(s)`);
+      if (normalisedSequenceLines) {
+        const characterCount = removedSequenceWhitespace
+          ? ` (${removedSequenceWhitespace} whitespace character(s))`
+          : "";
+        changes.push(`remove whitespace from ${normalisedSequenceLines} sequence line(s)${characterCount}`);
+      }
+      return { sequenceKey: JSON.stringify(records), changes };
+    };
+
+    const setWarnings = (warnings, checked = false, needsAttention = false, hasUnresolvedFiles = false) => {
+      const message = warnings.join("\n");
+      marker.hidden = warnings.length === 0 && !checked;
+      marker.textContent = warnings.length ? "!" : "\u2713";
+      marker.style.fontSize = "1rem";
+      marker.title = message || "FASTA input checked; no sanitisation is required.";
+      marker.setAttribute("aria-label", message || "FASTA input checked; no sanitisation is required.");
+      marker.style.background = needsAttention ? "#dc3545" : (warnings.length ? "#ffc107" : "#198754");
+      marker.style.color = warnings.length && !needsAttention ? "#212529" : "#ffffff";
+      summary.hidden = warnings.length === 0;
+      summary.className = needsAttention ? "alert alert-danger" : "alert alert-warning";
+      summary.replaceChildren();
+      if (warnings.length) {
+        const heading = document.createElement("strong");
+        heading.textContent = needsAttention
+          ? "Input needs attention before the run"
+          : (hasUnresolvedFiles ? "Review input before the run" : "Input will be adjusted before the run");
+        const list = document.createElement("ul");
+        list.style.margin = "0.5rem 0 0";
+        warnings.forEach((warning) => {
+          const item = document.createElement("li");
+          item.textContent = warning;
+          list.appendChild(item);
+        });
+        summary.append(heading, list);
+      }
+      if (fieldContainer) fieldContainer.classList.toggle("has-warning", warnings.length > 0 && !needsAttention);
+      if (fieldContainer) fieldContainer.classList.toggle("has-error", needsAttention);
+    };
+
+    const setChecking = () => {
+      marker.hidden = false;
+      marker.textContent = "...";
+      marker.title = "Checking FASTA input";
+      marker.setAttribute("aria-label", "Checking FASTA input");
+      marker.style.background = "#6c757d";
+      marker.style.color = "#ffffff";
+      marker.style.fontSize = "0.7rem";
+      summary.hidden = false;
+      summary.className = "alert alert-info";
+      summary.replaceChildren("Checking FASTA input...");
+    };
+
+    const getDirectoryFastaFiles = async (directoryPath, directoryUrl) => {
+      const response = await fetch(directoryUrl, {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" }
+      });
+      if (!response.ok) throw new Error(`Could not list ${directoryPath} (${response.status}).`);
+
+      const listing = await response.json();
+      return (listing.files || [])
+        .filter((file) => file.type === "f" && isFastaPath(file.name) && file.url)
+        .map((file) => ({
+          url: file.url,
+          label: file.name,
+          symbolicLink: file.symlink === true || file.symbolic_link === true || isSymbolicLink(file.mode)
+        }));
+    };
+
+    const getDirectFastaFile = async (path) => {
+      const separator = path.lastIndexOf("/");
+      const directoryPath = separator === 0 ? "/" : path.slice(0, separator);
+      const fileName = path.slice(separator + 1);
+      const files = await getDirectoryFastaFiles(directoryPath, buildFilesUrl(directoryPath));
+      const file = files.find((candidate) => candidate.label === fileName);
+      if (!file) throw new Error(`File not found: ${path}`);
+      return file;
+    };
+
+    let requestNumber = 0;
+    let preflightTimer = null;
+    let lastCheckedPath = null;
+    let lastWarnings = null;
+    let lastNeedsAttention = false;
+    let lastHasUnresolvedFiles = false;
+    const preflight = async () => {
+      const request = ++requestNumber;
+      const path = input.value.trim();
+      if (!path.startsWith("/")) {
+        lastCheckedPath = path;
+        lastWarnings = [];
+        lastNeedsAttention = false;
+        lastHasUnresolvedFiles = false;
+        setWarnings([]);
+        return;
+      }
+      if (/\.(?:csv|ya?ml)$/i.test(path)) {
+        lastCheckedPath = path;
+        lastWarnings = [];
+        lastNeedsAttention = false;
+        lastHasUnresolvedFiles = false;
+        setWarnings([]);
+        return;
+      }
+      if (path === lastCheckedPath && lastWarnings !== null) {
+        setWarnings(lastWarnings, true, lastNeedsAttention, lastHasUnresolvedFiles);
+        return;
+      }
+
+      try {
+        const filesUrl = buildFilesUrl(path);
+        const files = isFastaPath(path)
+          ? [await getDirectFastaFile(path)]
+          : await getDirectoryFastaFiles(path, filesUrl);
+        if (request !== requestNumber) return;
+        if (!files.length) {
+          const warnings = ["No FASTA files (.fa or .fasta) were found in this directory."];
+          lastCheckedPath = path;
+          lastWarnings = warnings;
+          lastNeedsAttention = true;
+          lastHasUnresolvedFiles = false;
+          setWarnings(warnings, false, true);
+          return;
+        }
+
+        const checkedFiles = await Promise.all(files.map(async (file) => {
+          if (file.symbolicLink) return { ...file, symbolicLink: true };
+          try {
+            const response = await fetch(file.url, { credentials: "same-origin" });
+            if (!response.ok) throw new Error(`Could not read ${file.label} (${response.status}).`);
+            return { ...file, ...parseFasta(await response.text(), file.label) };
+          } catch (error) {
+            return { ...file, error: error.message };
+          }
+        }));
+        if (request !== requestNumber) return;
+
+        const seen = new Map();
+        const warnings = checkedFiles.flatMap((file) => {
+          if (file.symbolicLink) {
+            return [`${file.label}: symbolic link; its target will be followed when the run starts.`];
+          }
+          if (file.error) return [file.error];
+          return file.changes.length
+          ? [`${file.label}: ${file.changes.join(", ")}.`]
+          : [];
+        });
+        checkedFiles.filter((file) => !file.error && !file.symbolicLink).forEach((file) => {
+          const original = seen.get(file.sequenceKey);
+          if (original) warnings.push(`${file.label}: duplicate sequence of ${original}; this file will be skipped.`);
+          else seen.set(file.sequenceKey, file.label);
+        });
+        lastCheckedPath = path;
+        lastWarnings = warnings;
+        lastNeedsAttention = false;
+        lastHasUnresolvedFiles = checkedFiles.some((file) => file.error || file.symbolicLink);
+        setWarnings(warnings, true, false, lastHasUnresolvedFiles);
+      } catch (error) {
+        if (request !== requestNumber) return;
+        const warnings = [`Could not check this input: ${error.message}`];
+        lastCheckedPath = path;
+        lastWarnings = warnings;
+        lastNeedsAttention = true;
+        lastHasUnresolvedFiles = false;
+        setWarnings(warnings, false, true);
+      }
+    };
+
+    const schedulePreflight = () => {
+      requestNumber += 1;
+      if (preflightTimer) window.clearTimeout(preflightTimer);
+      setChecking();
+      preflightTimer = window.setTimeout(preflight, 25);
+    };
+
+    if (input.dataset.oodInputPreflightBound !== "1") {
+      let observedPath = input.value.trim();
+      const valueObserver = window.setInterval(() => {
+        if (!input.isConnected) {
+          window.clearInterval(valueObserver);
+          return;
+        }
+        const currentPath = input.value.trim();
+        if (currentPath === observedPath) return;
+        observedPath = currentPath;
+        schedulePreflight();
+      }, 250);
+      const triggerPreflight = () => {
+        observedPath = input.value.trim();
+        schedulePreflight();
+      };
+      input.addEventListener("change", triggerPreflight);
+      input.addEventListener("blur", triggerPreflight);
+      input.dataset.oodInputPreflightBound = "1";
+    }
+  };
+
+  document.addEventListener("DOMContentLoaded", initInputPreflight);
+  document.addEventListener("turbo:load", initInputPreflight);
+  document.addEventListener("page:load", initInputPreflight);
 })();
