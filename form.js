@@ -14,25 +14,27 @@
   const METHOD_TOKEN_LIMITS = {
     boltz: {
       title: "Boltz",
-      limit: "5,000"
+      limit: 5000
     },
     alphafold3: {
       title: "AlphaFold3",
-      limit: "5,000",
+      limit: 5000,
     },
     alphafold2: {
       title: "AlphaFold2",
-      limit: "4,000"
+      limit: 4000
     },
     colabfold: {
       title: "ColabFold",
-      limit: "4,000"
+      limit: 4000
     },
     esmfold: {
       title: "ESMFold",
-      limit: "600"
+      limit: 600
     }
   };
+  const METHODS_REJECTING_UNKNOWN_RESIDUES = new Set(["boltz", "alphafold3"]);
+  const countUnknownResidues = (sequence) => (sequence.match(/X/g) || []).length;
 
   const escapeForSelector = (value) => {
     if (window.CSS && typeof window.CSS.escape === "function") {
@@ -344,7 +346,7 @@
 
       const noteHtml = info.note ? `<div>${info.note}</div>` : "";
       panel.innerHTML = `
-        ${info.title} approximate length limit: <strong>${info.limit}</strong>
+        ${info.title} approximate length limit: <strong>${info.limit.toLocaleString()}</strong>
         ${noteHtml}
       `;
       panel.hidden = false;
@@ -543,10 +545,15 @@
           : "";
         changes.push(`remove whitespace from ${normalisedSequenceLines} sequence line(s)${characterCount}`);
       }
-      return { sequenceKey: JSON.stringify(records), changes };
+      return {
+        sequenceKey: JSON.stringify(records),
+        sequenceLength: records.reduce((total, record) => total + record.length, 0),
+        unknownResidueCount: records.reduce((total, record) => total + countUnknownResidues(record), 0),
+        changes
+      };
     };
 
-    const setWarnings = (warnings, checked = false, needsAttention = false, hasUnresolvedFiles = false) => {
+    const setWarnings = (warnings, checked = false, needsAttention = false, requiresReview = false) => {
       const message = warnings.join("\n");
       marker.hidden = warnings.length === 0 && !checked;
       marker.textContent = warnings.length ? "!" : "\u2713";
@@ -562,7 +569,7 @@
         const heading = document.createElement("strong");
         heading.textContent = needsAttention
           ? "Input needs attention before the run"
-          : (hasUnresolvedFiles ? "Review input before the run" : "Input will be adjusted before the run");
+          : (requiresReview ? "Review input before the run" : "Input will be adjusted before the run");
         const list = document.createElement("ul");
         list.style.margin = "0.5rem 0 0";
         warnings.forEach((warning) => {
@@ -588,6 +595,75 @@
       summary.className = "alert alert-info";
       summary.replaceChildren("Checking FASTA input...");
     };
+
+    const methodControl = getFieldControl("af_method", "select");
+    const getUnknownResidueWarning = (count, label) => {
+      const method = methodControl?.value;
+      const methodInfo = METHOD_TOKEN_LIMITS[method];
+      if (!count || !methodInfo || !METHODS_REJECTING_UNKNOWN_RESIDUES.has(method)) return null;
+      return `${label} contains ${count} unknown X residue(s), which ${methodInfo.title} does not support.`;
+    };
+    const getManualSequenceWarnings = (value) => {
+      const removableCharacters = value.match(/[\s\uFEFF\u200B]/gu) || [];
+      const sequence = value.replace(/[\s\uFEFF\u200B]/gu, "");
+      if (!/^[A-Z:*-]+$/.test(sequence)) return [];
+      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
+      const sequenceLength = sequence.replace(/:/g, "").length;
+      const unknownResidueWarning = getUnknownResidueWarning(
+        countUnknownResidues(sequence),
+        "Manual sequence"
+      );
+      const warnings = unknownResidueWarning ? [unknownResidueWarning] : [];
+      if (removableCharacters.length) {
+        warnings.push(
+          `Manual sequence: remove ${removableCharacters.length} whitespace character(s).`
+        );
+      }
+      if (limit && sequenceLength > limit.limit) {
+        warnings.push(
+          `Manual sequence length ${sequenceLength.toLocaleString()} residues exceeds the ${limit.title} approximate limit of ${limit.limit.toLocaleString()}.`
+        );
+      }
+      return warnings;
+    };
+    const buildWarnings = (checkedFiles) => {
+      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
+      const seen = new Map();
+      const warnings = checkedFiles.flatMap((file) => {
+        if (file.symbolicLink) {
+          return [`${file.label}: symbolic link; its target will be followed when the run starts.`];
+        }
+        if (file.error) return [file.error];
+        const fileWarnings = file.changes.length
+          ? [`${file.label}: ${file.changes.join(", ")}.`]
+          : [];
+        const unknownResidueWarning = getUnknownResidueWarning(
+          file.unknownResidueCount,
+          file.label
+        );
+        if (unknownResidueWarning) fileWarnings.push(unknownResidueWarning);
+        if (limit && file.sequenceLength > limit.limit) {
+          fileWarnings.push(
+            `${file.label}: total sequence length ${file.sequenceLength.toLocaleString()} residues exceeds the ${limit.title} approximate limit of ${limit.limit.toLocaleString()}.`
+          );
+        }
+        return fileWarnings;
+      });
+      checkedFiles.filter((file) => !file.error && !file.symbolicLink).forEach((file) => {
+        const original = seen.get(file.sequenceKey);
+        if (original) warnings.push(`${file.label}: duplicate sequence of ${original}; this file will be skipped.`);
+        else seen.set(file.sequenceKey, file.label);
+      });
+      return warnings;
+    };
+    const requiresReview = (checkedFiles) => {
+      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
+      return checkedFiles.some((file) =>
+        file.error || file.symbolicLink || (limit && file.sequenceLength > limit.limit)
+      );
+    };
+    const hasUnsupportedUnknownResidues = (checkedFiles) =>
+      checkedFiles.some((file) => getUnknownResidueWarning(file.unknownResidueCount, file.label));
 
     const getDirectoryFastaFiles = async (directoryPath, directoryUrl) => {
       const response = await fetch(directoryUrl, {
@@ -635,28 +711,40 @@
     let lastCheckedPath = null;
     let lastWarnings = null;
     let lastNeedsAttention = false;
-    let lastHasUnresolvedFiles = false;
+    let lastRequiresReview = false;
+    let lastCheckedFiles = null;
     const preflight = async () => {
       const request = ++requestNumber;
-      const path = input.value.trim();
+      const rawInput = input.value;
+      const path = rawInput.trim();
       if (!path.startsWith("/")) {
-        lastCheckedPath = path;
-        lastWarnings = [];
-        lastNeedsAttention = false;
-        lastHasUnresolvedFiles = false;
-        setWarnings([]);
+        lastCheckedPath = rawInput;
+        lastWarnings = getManualSequenceWarnings(rawInput);
+        lastNeedsAttention = Boolean(getUnknownResidueWarning(
+          countUnknownResidues(rawInput.replace(/[\s\uFEFF\u200B]/gu, "")),
+          "Manual sequence"
+        ));
+        lastRequiresReview = lastWarnings.length > 0 && !lastNeedsAttention;
+        lastCheckedFiles = null;
+        setWarnings(lastWarnings, false, lastNeedsAttention, lastRequiresReview);
         return;
       }
       if (/\.(?:csv|ya?ml)$/i.test(path)) {
         lastCheckedPath = path;
         lastWarnings = [];
         lastNeedsAttention = false;
-        lastHasUnresolvedFiles = false;
+        lastRequiresReview = false;
+        lastCheckedFiles = null;
         setWarnings([]);
         return;
       }
       if (path === lastCheckedPath && lastWarnings !== null) {
-        setWarnings(lastWarnings, true, lastNeedsAttention, lastHasUnresolvedFiles);
+        if (lastCheckedFiles) {
+          lastWarnings = buildWarnings(lastCheckedFiles);
+          lastNeedsAttention = hasUnsupportedUnknownResidues(lastCheckedFiles);
+          lastRequiresReview = requiresReview(lastCheckedFiles);
+        }
+        setWarnings(lastWarnings, true, lastNeedsAttention, lastRequiresReview);
         return;
       }
 
@@ -671,7 +759,8 @@
           lastCheckedPath = path;
           lastWarnings = warnings;
           lastNeedsAttention = true;
-          lastHasUnresolvedFiles = false;
+          lastRequiresReview = false;
+          lastCheckedFiles = null;
           setWarnings(warnings, false, true);
           return;
         }
@@ -688,33 +777,21 @@
         });
         if (request !== requestNumber) return;
 
-        const seen = new Map();
-        const warnings = checkedFiles.flatMap((file) => {
-          if (file.symbolicLink) {
-            return [`${file.label}: symbolic link; its target will be followed when the run starts.`];
-          }
-          if (file.error) return [file.error];
-          return file.changes.length
-          ? [`${file.label}: ${file.changes.join(", ")}.`]
-          : [];
-        });
-        checkedFiles.filter((file) => !file.error && !file.symbolicLink).forEach((file) => {
-          const original = seen.get(file.sequenceKey);
-          if (original) warnings.push(`${file.label}: duplicate sequence of ${original}; this file will be skipped.`);
-          else seen.set(file.sequenceKey, file.label);
-        });
+        const warnings = buildWarnings(checkedFiles);
         lastCheckedPath = path;
         lastWarnings = warnings;
-        lastNeedsAttention = false;
-        lastHasUnresolvedFiles = checkedFiles.some((file) => file.error || file.symbolicLink);
-        setWarnings(warnings, true, false, lastHasUnresolvedFiles);
+        lastNeedsAttention = hasUnsupportedUnknownResidues(checkedFiles);
+        lastRequiresReview = requiresReview(checkedFiles);
+        lastCheckedFiles = checkedFiles;
+        setWarnings(warnings, true, lastNeedsAttention, lastRequiresReview);
       } catch (error) {
         if (request !== requestNumber) return;
         const warnings = [`Could not check this input: ${error.message}`];
         lastCheckedPath = path;
         lastWarnings = warnings;
         lastNeedsAttention = true;
-        lastHasUnresolvedFiles = false;
+        lastRequiresReview = false;
+        lastCheckedFiles = null;
         setWarnings(warnings, false, true);
       }
     };
@@ -729,6 +806,19 @@
     if (input.dataset.oodInputPreflightBound !== "1") {
       input.addEventListener("input", schedulePreflight);
       input.dataset.oodInputPreflightBound = "1";
+    }
+    if (methodControl && methodControl.dataset.oodInputLengthBound !== "1") {
+      methodControl.addEventListener("change", () => {
+        if (lastCheckedFiles) {
+          lastWarnings = buildWarnings(lastCheckedFiles);
+          lastNeedsAttention = hasUnsupportedUnknownResidues(lastCheckedFiles);
+          lastRequiresReview = requiresReview(lastCheckedFiles);
+          setWarnings(lastWarnings, true, lastNeedsAttention, lastRequiresReview);
+        } else {
+          schedulePreflight();
+        }
+      });
+      methodControl.dataset.oodInputLengthBound = "1";
     }
   };
 
