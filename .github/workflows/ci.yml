@@ -32,3 +32,6 @@ jobs:
 
       - name: Validate Open OnDemand app templates
         run: ruby scripts/validate_ood_app.rb
+
+      - name: Test input sanitisation
+        run: python -m unittest discover -s tests -v

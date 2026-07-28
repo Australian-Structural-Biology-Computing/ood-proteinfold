@@ -23,6 +23,7 @@ def sanitise_fasta(source_path, destination_path):
     has_record = False
     record_has_content = False
     blank_lines = 0
+    trailing_blank_lines = 0
     normalised_headers = 0
     normalised_sequence_lines = 0
     normalised_line_endings = 0
@@ -44,7 +45,9 @@ def sanitise_fasta(source_path, destination_path):
             line = raw_line.strip()
             if not line:
                 blank_lines += 1
+                trailing_blank_lines += 1
                 continue
+            trailing_blank_lines = 0
             if line.startswith(">"):
                 if has_record and not record_has_content:
                     raise ValueError(
@@ -84,6 +87,7 @@ def sanitise_fasta(source_path, destination_path):
     digest.update(record_digest.digest())
 
     changes = []
+    blank_lines -= trailing_blank_lines
     if blank_lines:
         changes.append(f"removed {blank_lines} blank line(s)")
     if normalised_line_endings:
@@ -231,11 +235,11 @@ def sanitise_samplesheet(samplesheet_path, output_path, input_dir, warning_path,
 
 
 def sanitise_directory(directory, warning_path):
-    fasta_files = [
+    fasta_files = sorted(
         entry.path
         for entry in os.scandir(directory)
         if entry.is_file() and entry.name.lower().endswith(FASTA_SUFFIXES)
-    ]
+    )
     warnings = []
     seen_normalised_hashes = {}
     for fasta_file in fasta_files:
