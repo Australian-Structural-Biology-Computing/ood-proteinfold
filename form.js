@@ -482,6 +482,7 @@
       let sequence = "";
       let hasHeader = false;
       let blankLines = 0;
+      let trailingBlankLines = 0;
       let normalisedHeaders = 0;
       let normalisedSequenceLines = 0;
       let normalisedLineEndings = 0;
@@ -498,8 +499,10 @@
         const line = rawLine.trim();
         if (!line) {
           blankLines += 1;
+          trailingBlankLines += 1;
           continue;
         }
+        trailingBlankLines = 0;
         if (line.startsWith(">")) {
           if (hasHeader && !sequence) {
             throw new Error(`${label} has a FASTA record with no sequence.`);
@@ -529,6 +532,7 @@
       if (!hasHeader) throw new Error(`${label} has no FASTA header.`);
       if (!sequence) throw new Error(`${label} has a final FASTA record with no sequence.`);
       records.push(sequence);
+      blankLines -= trailingBlankLines;
       const changes = [];
       if (blankLines) changes.push(`remove ${blankLines} blank line(s)`);
       if (normalisedLineEndings) changes.push(`standardise line endings in ${normalisedLineEndings} line(s)`);
@@ -612,6 +616,20 @@
       return file;
     };
 
+    const mapWithConcurrency = async (items, limit, callback) => {
+      const results = Array(items.length);
+      let nextIndex = 0;
+      const worker = async () => {
+        while (nextIndex < items.length) {
+          const index = nextIndex;
+          nextIndex += 1;
+          results[index] = await callback(items[index]);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+      return results;
+    };
+
     let requestNumber = 0;
     let preflightTimer = null;
     let lastCheckedPath = null;
@@ -658,7 +676,7 @@
           return;
         }
 
-        const checkedFiles = await Promise.all(files.map(async (file) => {
+        const checkedFiles = await mapWithConcurrency(files, 6, async (file) => {
           if (file.symbolicLink) return { ...file, symbolicLink: true };
           try {
             const response = await fetch(file.url, { credentials: "same-origin" });
@@ -667,7 +685,7 @@
           } catch (error) {
             return { ...file, error: error.message };
           }
-        }));
+        });
         if (request !== requestNumber) return;
 
         const seen = new Map();
@@ -705,27 +723,11 @@
       requestNumber += 1;
       if (preflightTimer) window.clearTimeout(preflightTimer);
       setChecking();
-      preflightTimer = window.setTimeout(preflight, 25);
+      preflightTimer = window.setTimeout(preflight, 250);
     };
 
     if (input.dataset.oodInputPreflightBound !== "1") {
-      let observedPath = input.value.trim();
-      const valueObserver = window.setInterval(() => {
-        if (!input.isConnected) {
-          window.clearInterval(valueObserver);
-          return;
-        }
-        const currentPath = input.value.trim();
-        if (currentPath === observedPath) return;
-        observedPath = currentPath;
-        schedulePreflight();
-      }, 250);
-      const triggerPreflight = () => {
-        observedPath = input.value.trim();
-        schedulePreflight();
-      };
-      input.addEventListener("change", triggerPreflight);
-      input.addEventListener("blur", triggerPreflight);
+      input.addEventListener("input", schedulePreflight);
       input.dataset.oodInputPreflightBound = "1";
     }
   };
