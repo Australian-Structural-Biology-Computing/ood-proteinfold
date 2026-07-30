@@ -127,39 +127,75 @@ print("".join(char for char in sys.stdin.read() if not char.isspace() and char n
 ' <<< "$1"
 }
 
+function strip_terminal_stops() {
+    python3 -c '
+import sys
+
+chains = sys.stdin.read().rstrip("\n").split(":")
+print(":".join(chain[:-1] if chain.endswith("*") else chain for chain in chains), end="")
+' <<< "$1"
+}
+
 function sanitise_input() {
-    if ! python3 ./sanitise_input.py "$@"; then
-        echo "WARNING: Input sanitisation failed; continuing with the original input." >&2
-        printf '%s\n' "WARNING: Input sanitisation failed; continuing with the original input." >> "$(pwd)/WARNING.txt"
-        return 1
+    if python3 ./sanitise_input.py "$@"; then
+        return 0
+    else
+        local status=$?
     fi
+    if [ "${status}" -eq 2 ]; then
+        return 2
+    fi
+    echo "WARNING: Input sanitisation failed; continuing with the original input." >&2
+    printf '%s\n' "WARNING: Input sanitisation failed; continuing with the original input." >> "$(pwd)/WARNING.txt"
+    return 1
+}
+
+function sanitise_staged_directory() {
+    if sanitise_input directory "./fasta" "$(pwd)/WARNING.txt" "${af_method}"; then
+        return 0
+    else
+        local status=$?
+    fi
+    if [ "${status}" -eq 2 ]; then
+        echo "ERROR: No compatible inputs remain for ${af_method}."
+        exit 1
+    fi
+    return 0
+}
+
+function create_and_normalise_samplesheet() {
+    create-samplesheet "$@"
+    SAMPLESHEET="$(pwd)/samplesheet.csv"
+    sanitise_input samplesheet-ids "${SAMPLESHEET}" "$(pwd)/WARNING.txt" || true
 }
 
 # Check if the input is an amino acid sequence or a path
 raw_user_input="<%= context.samplesheet %>"
 user_input="$(printf '%s' "${raw_user_input}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-sequence_input="$(strip_all_whitespace "${user_input}")"
+whitespace_free_sequence="$(strip_all_whitespace "${user_input}")"
+sequence_input="$(strip_terminal_stops "${whitespace_free_sequence}")"
+af_method="<%= context.af_method %>"
 
 MODE=""
-[[ "${sequence_input}" =~ ^[A-Z:\*\-]+$ ]] && MODE="MANUAL_INPUT"
-[[ "${user_input}" =~ ^.*\.csv$ ]] && MODE="SAMPLESHEET_INPUT"
-[[ "${user_input}" =~ \.(fa(sta)?|y(a)?ml)$ ]] && MODE="FASTA_INPUT"
+[[ "${sequence_input}" =~ ^[ACDEFGHIKLMNPQRSTVWYX]+(:[ACDEFGHIKLMNPQRSTVWYX]+)*$ ]] && MODE="MANUAL_INPUT"
+[[ "${user_input,,}" =~ \.csv$ ]] && MODE="SAMPLESHEET_INPUT"
+[[ "${user_input,,}" =~ \.(fa(sta)?|y(a)?ml)$ ]] && MODE="FASTA_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
 if [ "${MODE}" == "MANUAL_INPUT" ]; then
-    if [ "${raw_user_input}" != "${sequence_input}" ]; then
+    if [ "${raw_user_input}" != "${whitespace_free_sequence}" ]; then
         echo "WARNING: Removed whitespace from manual sequence input" | tee "$(pwd)/WARNING.txt" >&2
+    fi
+    if [ "${whitespace_free_sequence}" != "${sequence_input}" ]; then
+        echo "WARNING: Removed terminal stop codon from manual sequence input" | tee -a "$(pwd)/WARNING.txt" >&2
     fi
     user_input="${sequence_input}"
 fi
 
 echo "${MODE}"
 
-# Validate input file format compatibility with selected method
-af_method="<%= context.af_method %>"
-
 # Check YAML/YML compatibility - only supported by Boltz
-if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input}" =~ \.(yaml|yml)$ ]]; then
+if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input,,}" =~ \.(yaml|yml)$ ]]; then
     if [ "${af_method}" != "boltz" ]; then
         echo "ERROR: YAML/YML input files are only supported by Boltz."
         echo "Current method: ${af_method}"
@@ -167,37 +203,9 @@ if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input}" =~ \.(yaml|yml)$ ]]; the
     fi
 fi
 
-# Check directory contents for incompatible file types
-if [ "${MODE}" == "DIRECTORY" ] && [ -d "${user_input}" ]; then
-    # Check for YAML/YML files in directory
-    if [ "${af_method}" != "boltz" ]; then
-        yaml_files=$(find "${user_input}" -type f \( -name "*.yaml" -o -name "*.yml" \) 2>/dev/null || true)
-        if [ ! -z "${yaml_files}" ]; then
-            echo "ERROR: Directory contains YAML/YML files, which are only supported by Boltz."
-            echo "Current method: ${af_method}"
-            echo "Found YAML/YML files:"
-            echo "${yaml_files}"
-            exit 1
-        fi
-    fi
-
-    # Check for JSON files in directory
-    if [ "${af_method}" != "helixfold3" ]; then
-        json_files=$(find "${user_input}" -type f -name "*.json" 2>/dev/null || true)
-        if [ ! -z "${json_files}" ]; then
-            echo "ERROR: Directory contains JSON files, which are only supported by the HelixFold3 method."
-            echo "Current method: ${af_method}"
-            echo "Found JSON files:"
-            echo "${json_files}"
-            exit 1
-        fi
-    fi
-fi
-
 create-samplesheet --version
 SAMPLESHEET=""
 
-af_method="<%= context.af_method %>"
 prot_mode="<%= context.prot_mode %>"
 
 # Auto-set multimer mode for colon-delimited sequences
@@ -236,12 +244,10 @@ then
         mkdir -p fasta
         temp_fasta_file="./fasta/converted_multimer.fasta"
         convert_colon_delimited_to_fasta "${user_input}" "${temp_fasta_file}"
-        create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
-        SAMPLESHEET="$(pwd)/samplesheet.csv"
+        create_and_normalise_samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
         echo "Successfully converted colon-delimited input to multi-FASTA and created samplesheet"
     else
-        create-samplesheet --aa-string "${user_input}" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
-        SAMPLESHEET="$(pwd)/samplesheet.csv"
+        create_and_normalise_samplesheet --aa-string "${user_input}" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     fi
 fi
 
@@ -250,6 +256,11 @@ then
     if sanitise_input samplesheet "${user_input}" "$(pwd)/sanitised_samplesheet.csv" "$(pwd)/fasta/samplesheet_inputs" "$(pwd)/WARNING.txt" "${af_method}"; then
         SAMPLESHEET="$(pwd)/sanitised_samplesheet.csv"
     else
+        sanitise_status=$?
+        if [ "${sanitise_status}" -eq 2 ]; then
+            echo "ERROR: No compatible inputs remain for ${af_method}."
+            exit 1
+        fi
         SAMPLESHEET="${user_input}"
     fi
 fi
@@ -259,11 +270,10 @@ then
     mkdir -p fasta
     cp "${user_input}" ./fasta/
     dos2unix ./fasta/*
-    if [[ "${user_input}" =~ \.fa(sta)?$ ]]; then
-        sanitise_input directory "./fasta" "$(pwd)/WARNING.txt" || true
+    if [[ "${user_input,,}" =~ \.fa(sta)?$ ]]; then
+        sanitise_staged_directory
     fi
-    create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
-    SAMPLESHEET="$(pwd)/samplesheet.csv"
+    create_and_normalise_samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
 fi
 
 if [ "${MODE}" == "DIRECTORY" ];
@@ -273,15 +283,39 @@ then
     cd "${user_input}"
     for filename in *
     do
-        echo "${filename}"
-        cp "$(pwd)/${filename}" "$working_dir/fasta/$(echo ${filename} | sed --expression='s/\s/\-/g')"
+        [ -f "${filename}" ] || continue
+        case "${filename,,}" in
+            *.fa|*.fasta)
+                ;;
+            *.yaml|*.yml)
+                [ "${af_method}" == "boltz" ] || continue
+                ;;
+            *)
+                continue
+                ;;
+        esac
+        staged_name="${filename//[[:space:]]/-}"
+        if [ -e "$working_dir/fasta/${staged_name}" ]; then
+            extension="${staged_name##*.}"
+            basename="${staged_name%.*}"
+            suffix=2
+            while [ -e "$working_dir/fasta/${basename}-${suffix}.${extension}" ]; do
+                ((suffix += 1))
+            done
+            staged_name="${basename}-${suffix}.${extension}"
+        fi
+        cp "${filename}" "$working_dir/fasta/${staged_name}"
     done
 
     cd ${working_dir}
-    dos2unix ./fasta/*
-    sanitise_input directory "./fasta" "$(pwd)/WARNING.txt" || true
-    create-samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
-    SAMPLESHEET="$(pwd)/samplesheet.csv"
+    staged_inputs=(./fasta/*)
+    if [ ! -e "${staged_inputs[0]}" ]; then
+        echo "ERROR: No compatible input files were found in ${user_input}."
+        exit 1
+    fi
+    dos2unix "${staged_inputs[@]}"
+    sanitise_staged_directory
+    create_and_normalise_samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
 fi
 
 if [ -f "$(pwd)/WARNING.txt" ]; then
