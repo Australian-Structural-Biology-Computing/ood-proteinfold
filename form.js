@@ -483,6 +483,96 @@
       if (isCsvPath(path)) return "csv";
       return null;
     };
+    const parseSamplesheet = (contents) => {
+      const rows = [];
+      let row = [];
+      let field = "";
+      let quoted = false;
+      for (let index = 0; index < contents.length; index += 1) {
+        const character = contents[index];
+        if (character === "\"") {
+          if (quoted && contents[index + 1] === "\"") {
+            field += "\"";
+            index += 1;
+          } else quoted = !quoted;
+        } else if (character === "," && !quoted) {
+          row.push(field);
+          field = "";
+        } else if ((character === "\n" || character === "\r") && !quoted) {
+          if (character === "\r" && contents[index + 1] === "\n") index += 1;
+          row.push(field);
+          if (row.some((value) => value.trim())) rows.push(row);
+          row = [];
+          field = "";
+        } else field += character;
+      }
+      if (quoted) throw new Error("Samplesheet contains an unterminated quoted field.");
+      row.push(field);
+      if (row.some((value) => value.trim())) rows.push(row);
+      const header = rows.shift() || [];
+      if (header.slice(0, 2).map((value) => value.trim()).join(",") !== "id,fasta") {
+        throw new Error("Samplesheet must start with the required columns: id,fasta.");
+      }
+      return rows.map((values, index) => {
+        const path = (values[1] || "").trim();
+        if (!path) throw new Error(`Samplesheet row ${index + 2} is missing an input path.`);
+        return { path, rowNumber: index + 2 };
+      });
+    };
+    const resolveSamplesheetPath = (samplesheetPath, referencedPath) => {
+      const base = referencedPath.startsWith("/")
+        ? []
+        : samplesheetPath.slice(0, samplesheetPath.lastIndexOf("/")).split("/");
+      referencedPath.split("/").forEach((part) => {
+        if (!part || part === ".") return;
+        if (part === "..") base.pop();
+        else base.push(part);
+      });
+      return `/${base.filter(Boolean).join("/")}`;
+    };
+    const validateBoltzYaml = (contents, label) => {
+      const entries = [];
+      let sequencesIndent = null;
+      let currentEntry = null;
+      contents.split(/\r\n|\r|\n/).forEach((rawLine) => {
+        const line = rawLine.replace(/\s+#.*$/, "");
+        if (!line.trim()) return;
+        const indent = line.length - line.trimStart().length;
+        if (/^sequences:\s*$/.test(line)) {
+          sequencesIndent = indent;
+          currentEntry = null;
+          return;
+        }
+        if (sequencesIndent === null || indent <= sequencesIndent) return;
+        const entity = line.trim().match(/^-\s+([^:]+):\s*$/);
+        if (entity) {
+          currentEntry = { type: entity[1], index: entries.length + 1, fields: {} };
+          entries.push(currentEntry);
+          return;
+        }
+        const field = line.trim().match(/^(id|sequence|smiles|ccd):\s*(.+)$/);
+        if (currentEntry && field) currentEntry.fields[field[1]] = field[2].trim();
+      });
+      if (sequencesIndent === null || !entries.length) {
+        throw new Error(`${label} must contain a non-empty sequences list.`);
+      }
+      entries.forEach((entry) => {
+        if (!new Set(["protein", "dna", "rna", "ligand"]).has(entry.type)) {
+          throw new Error(`${label} has unsupported Boltz entity type: ${entry.type}.`);
+        }
+        if (!entry.fields.id || entry.fields.id === "[]") {
+          throw new Error(`${label} ${entry.type} entry ${entry.index} is missing id.`);
+        }
+        if (["protein", "dna", "rna"].includes(entry.type) && !entry.fields.sequence) {
+          throw new Error(`${label} ${entry.type} entry ${entry.index} is missing sequence.`);
+        }
+        if (entry.type === "ligand" && Boolean(entry.fields.smiles) === Boolean(entry.fields.ccd)) {
+          throw new Error(
+            `${label} ligand entry ${entry.index} must contain exactly one of smiles or ccd.`
+          );
+        }
+      });
+    };
     const isSymbolicLink = (mode) => {
       const values = [Number(mode)];
       if (typeof mode === "string" && /^[0-7]+$/.test(mode)) {
@@ -593,7 +683,7 @@
             throw new Error(`${label} has an empty FASTA header.`);
           }
           if (hasHeader) records.push(normaliseRecord(sequence, header));
-          if (rawLine !== `>${line.slice(1).trim()}\n`) normalisedHeaders += 1;
+          if (rawText !== `>${line.slice(1).trim()}`) normalisedHeaders += 1;
           hasHeader = true;
           header = line.slice(1).trim();
           sequence = "";
@@ -607,7 +697,7 @@
             header = null;
             sequence = "";
           }
-          if (rawLine !== `${normalisedSequence}\n`) {
+          if (rawText !== normalisedSequence) {
             normalisedSequenceLines += 1;
             removedSequenceWhitespace += rawText.length - normalisedSequence.length;
           }
@@ -734,7 +824,7 @@
     const getFileSeverity = (file, limit) => {
       if (file.error) return "error";
       if (unsupportedEntityTypes(file).length) {
-        return file.directoryInput ? "review" : "error";
+        return file.collectionInput ? "review" : "error";
       }
       if (
         file.kind === "yaml" &&
@@ -753,14 +843,18 @@
     };
     const getCheckedFilesState = (checkedFiles) => {
       const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
-      let needsAttention = false;
-      let requiresReview = false;
-      checkedFiles.forEach((file) => {
-        const severity = getFileSeverity(file, limit);
-        needsAttention ||= severity === "error";
-        requiresReview ||= severity === "review";
-      });
-      return { needsAttention, requiresReview };
+      const severities = checkedFiles.map((file) => getFileSeverity(file, limit));
+      const noRunnableInputs =
+        checkedFiles.some((file) => file.collectionInput) &&
+        !checkedFiles.some((file) =>
+          !file.error &&
+          !file.ignoredForMethod &&
+          !unsupportedEntityTypes(file).length
+        );
+      return {
+        needsAttention: noRunnableInputs || severities.includes("error"),
+        requiresReview: severities.includes("review")
+      };
     };
     const buildWarnings = (checkedFiles) => {
       const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
@@ -772,17 +866,17 @@
         if (file.symbolicLink) {
           return [`${file.label}: symbolic link; its target will be followed when the run starts.`];
         }
+        if (file.kind === "csv") return [];
+        if (file.error) return [file.error];
         if (file.kind === "yaml") {
           return methodControl?.value === "boltz"
             ? []
             : [`${file.label}: YAML input is only supported by Boltz.`];
         }
-        if (file.kind === "csv") return [];
-        if (file.error) return [file.error];
         const unsupportedTypes = unsupportedEntityTypes(file);
         if (unsupportedTypes.length) {
           return [
-            file.directoryInput
+            file.collectionInput
               ? `${file.label}: ${unsupportedTypes.join(", ")} input will be ignored unless AlphaFold3 or Boltz is selected.`
               : `${file.label}: ${unsupportedTypes.join(", ")} input is only supported by AlphaFold3 or Boltz.`
           ];
@@ -803,39 +897,56 @@
         return fileWarnings;
       });
     };
-    const getDirectoryFiles = async (directoryPath, directoryUrl, signal) => {
-      const response = await fetch(directoryUrl, {
+    const getDirectoryFiles = async (directoryPath, signal, cache) => {
+      if (cache.has(directoryPath)) return cache.get(directoryPath);
+      const request = fetch(buildFilesUrl(directoryPath), {
         credentials: "same-origin",
         headers: { Accept: "application/json" },
         signal
+      }).then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Could not list ${directoryPath} (${response.status}).`);
+        }
+        const listing = await response.json();
+        return (listing.files || [])
+          .filter((file) => file.type === "f" && file.url)
+          .map((file) => ({
+            url: file.url,
+            label: file.name,
+            kind: getInputKind(file.name),
+            symbolicLink:
+              file.symlink === true ||
+              file.symbolic_link === true ||
+              isSymbolicLink(file.mode)
+          }))
+          .sort((left, right) => left.label.localeCompare(right.label));
       });
-      if (!response.ok) throw new Error(`Could not list ${directoryPath} (${response.status}).`);
-
-      const listing = await response.json();
-      return (listing.files || [])
-        .filter((file) => file.type === "f" && file.url)
-        .map((file) => ({
-          url: file.url,
-          label: file.name,
-          kind: getInputKind(file.name),
-          symbolicLink: file.symlink === true || file.symbolic_link === true || isSymbolicLink(file.mode)
-        }))
-        .sort((left, right) => (left.label < right.label ? -1 : left.label > right.label ? 1 : 0));
+      cache.set(directoryPath, request);
+      return request;
     };
 
-    const getDirectInputFile = async (path, signal) => {
+    const getDirectInputFile = async (path, signal, cache) => {
       const separator = path.lastIndexOf("/");
       const directoryPath = separator === 0 ? "/" : path.slice(0, separator);
       const fileName = path.slice(separator + 1);
-      const files = await getDirectoryFiles(
-        directoryPath,
-        buildFilesUrl(directoryPath),
-        signal
-      );
+      const files = await getDirectoryFiles(directoryPath, signal, cache);
       const file = files.find((candidate) => candidate.label === fileName);
       if (!file) throw new Error(`File not found: ${path}`);
       return file;
     };
+    const fetchText = async (file, signal) => {
+      const response = await fetch(file.url, { credentials: "same-origin", signal });
+      if (!response.ok) throw new Error(`Could not read ${file.label} (${response.status}).`);
+      return response.text();
+    };
+    const prepareCollectionFiles = (files) =>
+      files
+        .filter((file) => file.kind === "fasta" || file.kind === "yaml")
+        .map((file) => ({
+          ...file,
+          collectionInput: true,
+          ignoredForMethod: file.kind === "yaml" && methodControl?.value !== "boltz"
+        }));
 
     const mapWithConcurrency = async (items, limit, callback) => {
       const results = Array(items.length);
@@ -892,60 +1003,71 @@
       }
 
       try {
-        const filesUrl = buildFilesUrl(path);
+        const listingCache = new Map();
         const directInput = isDirectInputPath(path);
         const directoryFiles = directInput
           ? []
-          : await getDirectoryFiles(path, filesUrl, controller.signal);
-        const files = directInput
-          ? [await getDirectInputFile(path, controller.signal)]
-          : directoryFiles.filter((file) =>
-            file.kind === "fasta" ||
-            (file.kind === "yaml" && methodControl?.value === "boltz")
-          );
-        files.forEach((file) => {
-          file.directoryInput = !directInput;
-        });
-        const ignoredYamlFiles = methodControl?.value === "boltz"
-          ? []
-          : directoryFiles
-            .filter((file) => file.kind === "yaml")
-            .map((file) => ({ ...file, ignoredForMethod: true }));
+          : await getDirectoryFiles(path, controller.signal, listingCache);
+        const selectedFile = directInput
+          ? await getDirectInputFile(path, controller.signal, listingCache)
+          : null;
+        let files = selectedFile ? [selectedFile] : prepareCollectionFiles(directoryFiles);
+        if (selectedFile?.kind === "csv") {
+          const rows = parseSamplesheet(await fetchText(selectedFile, controller.signal));
+          files = prepareCollectionFiles(await mapWithConcurrency(rows, 6, async (row) => {
+            const referencedPath = resolveSamplesheetPath(path, row.path);
+            const file = await getDirectInputFile(
+              referencedPath,
+              controller.signal,
+              listingCache
+            );
+            if (file.kind !== "fasta" && file.kind !== "yaml") {
+              throw new Error(
+                `Samplesheet row ${row.rowNumber} has unsupported input type: ${row.path}.`
+              );
+            }
+            return { ...file, label: `${file.label} (samplesheet row ${row.rowNumber})` };
+          }));
+        }
         if (request !== requestNumber) return;
         if (!files.length) {
-          const yamlFiles = directoryFiles.filter((file) => file.kind === "yaml");
           const expectedInputs = methodControl?.value === "boltz"
             ? "FASTA or YAML input files"
             : "FASTA files (.fa or .fasta)";
-          const warnings = yamlFiles.length && methodControl?.value !== "boltz"
-            ? yamlFiles.map((file) => `${file.label}: YAML input is only supported by Boltz.`)
-            : [`No compatible ${expectedInputs} were found in this directory.`];
+          const warnings = [`No compatible ${expectedInputs} were found in this input.`];
           lastCheckedPath = path;
           lastWarnings = warnings;
           lastNeedsAttention = true;
           lastRequiresReview = false;
-          lastCheckedFiles = yamlFiles.length ? yamlFiles : null;
-          setWarnings(warnings, yamlFiles.length > 0, true);
+          lastCheckedFiles = null;
+          setWarnings(warnings, false, true);
           return;
         }
 
         const checkedFiles = await mapWithConcurrency(files, 6, async (file) => {
+          if (file.ignoredForMethod) return file;
+          if (file.kind === "yaml") {
+            try {
+              validateBoltzYaml(await fetchText(file, controller.signal), file.label);
+              return file;
+            } catch (error) {
+              if (error.name === "AbortError") throw error;
+              return { ...file, error: error.message };
+            }
+          }
           if (file.kind !== "fasta") return file;
           if (file.symbolicLink) return { ...file, symbolicLink: true };
           try {
-            const response = await fetch(file.url, {
-              credentials: "same-origin",
-              signal: controller.signal
-            });
-            if (!response.ok) throw new Error(`Could not read ${file.label} (${response.status}).`);
-            return { ...file, ...parseFasta(await response.text(), file.label) };
+            return {
+              ...file,
+              ...parseFasta(await fetchText(file, controller.signal), file.label)
+            };
           } catch (error) {
             if (error.name === "AbortError") throw error;
             return { ...file, error: error.message };
           }
         });
         if (request !== requestNumber) return;
-        checkedFiles.push(...ignoredYamlFiles);
 
         const warnings = buildWarnings(checkedFiles);
         lastCheckedPath = path;
@@ -983,9 +1105,10 @@
     if (methodControl && methodControl.dataset.oodInputLengthBound !== "1") {
       methodControl.addEventListener("change", () => {
         const currentPath = input.value.trim();
-        const isDirectoryPath =
-          currentPath.startsWith("/") && !isDirectInputPath(currentPath);
-        if (isDirectoryPath) {
+        const mustReloadFiles =
+          currentPath.startsWith("/") &&
+          (!isDirectInputPath(currentPath) || isCsvPath(currentPath));
+        if (mustReloadFiles) {
           schedulePreflight(true);
         } else if (lastCheckedFiles) {
           lastWarnings = buildWarnings(lastCheckedFiles);

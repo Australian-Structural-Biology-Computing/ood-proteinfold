@@ -1,4 +1,5 @@
 import contextlib
+import csv
 import importlib.util
 import io
 from pathlib import Path
@@ -160,6 +161,91 @@ class SanitiseDirectoryTests(unittest.TestCase):
             self.assertTrue((directory / "a.fasta").exists())
             self.assertFalse((directory / "b.fasta").exists())
             self.assertIn(str(directory / "b.fasta"), warning_path.read_text())
+
+
+class BoltzYamlTests(unittest.TestCase):
+    def test_rejects_invalid_yaml_structure(self):
+        invalid_inputs = {
+            "empty sequences": "sequences: []\n",
+            "unknown entity": "sequences:\n  - carbohydrate:\n      id: A\n",
+            "missing id": "sequences:\n  - protein:\n      sequence: ACDE\n",
+            "duplicate ids": (
+                "sequences:\n"
+                "  - protein:\n      id: A\n      sequence: ACDE\n"
+                "  - dna:\n      id: A\n      sequence: ACTG\n"
+            ),
+            "missing sequence": "sequences:\n  - rna:\n      id: A\n",
+            "ligand fields": (
+                "sequences:\n"
+                "  - ligand:\n      id: A\n      smiles: CCO\n      ccd: ATP\n"
+            ),
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            input_path = Path(temporary_directory) / "input.yaml"
+            for name, contents in invalid_inputs.items():
+                with self.subTest(name=name):
+                    input_path.write_text(contents)
+                    with self.assertRaises(SANITISE_INPUT.InputValidationError):
+                        SANITISE_INPUT.validate_boltz_yaml(input_path)
+
+
+class SanitiseSamplesheetTests(unittest.TestCase):
+    def test_filters_duplicate_and_incompatible_entries(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            (directory / "first.fasta").write_text(">first|protein\nACDE\n")
+            (directory / "duplicate.fasta").write_text(">duplicate|protein\nAC DE\n")
+            (directory / "dna.fasta").write_text(">dna|dna\nACTGN\n")
+            (directory / "input.yaml").write_text(
+                "sequences:\n  - protein:\n      id: A\n      sequence: ACDE\n"
+            )
+            samplesheet = directory / "samplesheet.csv"
+            samplesheet.write_text(
+                "id,fasta\n"
+                "first,first.fasta\n"
+                "duplicate,duplicate.fasta\n"
+                "dna,dna.fasta\n"
+                "yaml,input.yaml\n"
+            )
+            output_path = directory / "sanitised.csv"
+            warning_path = directory / "WARNING.txt"
+
+            SANITISE_INPUT.sanitise_samplesheet(
+                samplesheet, output_path, directory / "inputs", warning_path, "alphafold2"
+            )
+
+            with output_path.open(newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual([row["id"] for row in rows], ["first"])
+            warnings = warning_path.read_text()
+            self.assertIn("normalised FASTA content matches row 2", warnings)
+            self.assertIn("FASTA record is dna input", warnings)
+            self.assertIn("YAML input is only supported by Boltz", warnings)
+
+    def test_keeps_non_protein_and_yaml_entries_for_boltz(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            (directory / "protein.fasta").write_text(">protein|protein\nACDE\n")
+            (directory / "smiles.fasta").write_text(">ligand|smiles\nCCO\n")
+            (directory / "input.yaml").write_text(
+                "sequences:\n  - protein:\n      id: A\n      sequence: ACDE\n"
+            )
+            samplesheet = directory / "samplesheet.csv"
+            samplesheet.write_text(
+                "id,fasta\n"
+                "protein,protein.fasta\n"
+                "smiles,smiles.fasta\n"
+                "yaml,input.yaml\n"
+            )
+            output_path = directory / "sanitised.csv"
+
+            SANITISE_INPUT.sanitise_samplesheet(
+                samplesheet, output_path, directory / "inputs", directory / "WARNING.txt", "boltz"
+            )
+
+            with output_path.open(newline="") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual([row["id"] for row in rows], ["protein", "smiles", "yaml"])
 
 
 class NormaliseSamplesheetIdsTests(unittest.TestCase):

@@ -29,6 +29,10 @@ class NoCompatibleInputsError(ValueError):
     """Input filtering left nothing that can be submitted."""
 
 
+class InputValidationError(ValueError):
+    """Input is malformed and must not be submitted to ProteinFold."""
+
+
 def strip_whitespace(value):
     return "".join(
         char for char in value if not char.isspace() and char not in {"\ufeff", "\u200b"}
@@ -83,6 +87,62 @@ def validate_entity_sequence(entity_type, sequence):
         raise ValueError("RNA sequence contains invalid nucleotide characters")
     elif entity_type == "smiles" and not SMILES_PATTERN.fullmatch(sequence):
         raise ValueError("SMILES sequence contains unsupported characters")
+
+
+def validate_boltz_yaml(path):
+    try:
+        import yaml
+    except ImportError as error:
+        raise InputValidationError("PyYAML is unavailable for Boltz YAML validation") from error
+
+    try:
+        with open(path, encoding="utf-8-sig") as handle:
+            data = yaml.safe_load(handle)
+    except (OSError, yaml.YAMLError) as error:
+        raise InputValidationError(f"Invalid Boltz YAML: {error}") from error
+
+    if not isinstance(data, dict):
+        raise InputValidationError("Boltz YAML must contain a top-level mapping")
+    sequences = data.get("sequences")
+    if not isinstance(sequences, list) or not sequences:
+        raise InputValidationError("Boltz YAML must contain a non-empty sequences list")
+
+    chain_ids = set()
+    for index, entry in enumerate(sequences, start=1):
+        if not isinstance(entry, dict) or len(entry) != 1:
+            raise InputValidationError(
+                f"Boltz YAML sequence entry {index} must be a single-key mapping"
+            )
+        entity_type, details = next(iter(entry.items()))
+        if entity_type not in {"protein", "dna", "rna", "ligand"}:
+            raise InputValidationError(
+                f"Boltz YAML sequence entry {index} has unsupported entity type: {entity_type}"
+            )
+        if not isinstance(details, dict):
+            raise InputValidationError(
+                f"Boltz YAML {entity_type} entry {index} must be a mapping"
+            )
+
+        identifiers = details.get("id")
+        identifiers = identifiers if isinstance(identifiers, list) else [identifiers]
+        if not identifiers or any(not isinstance(value, str) or not value.strip() for value in identifiers):
+            raise InputValidationError(f"Boltz YAML {entity_type} entry {index} is missing id")
+        if len(set(identifiers)) != len(identifiers) or chain_ids.intersection(identifiers):
+            raise InputValidationError("Boltz YAML chain ids must be unique")
+        chain_ids.update(identifiers)
+
+        if entity_type in {"protein", "dna", "rna"}:
+            sequence = details.get("sequence")
+            if not isinstance(sequence, str) or not sequence.strip():
+                raise InputValidationError(
+                    f"Boltz YAML {entity_type} entry {index} is missing sequence"
+                )
+        else:
+            ligands = [key for key in ("smiles", "ccd") if details.get(key)]
+            if len(ligands) != 1:
+                raise InputValidationError(
+                    f"Boltz YAML ligand entry {index} must contain exactly one of smiles or ccd"
+                )
 
 
 def sanitise_fasta(source_path, destination_path, af_method=None):
@@ -406,6 +466,7 @@ def sanitise_samplesheet(samplesheet_path, output_path, input_dir, warning_path,
                         f"({'; '.join(changes)})"
                     )
             else:
+                validate_boltz_yaml(input_path)
                 shutil.copy2(input_path, staged_path)
 
             sample_id = (row.get(id_column) or "").strip()
@@ -432,11 +493,19 @@ def sanitise_samplesheet(samplesheet_path, output_path, input_dir, warning_path,
 
 
 def sanitise_directory(directory, warning_path, af_method=None):
+    yaml_files = sorted(
+        entry.path
+        for entry in os.scandir(directory)
+        if entry.is_file() and entry.name.lower().endswith(YAML_SUFFIXES)
+    )
     fasta_files = sorted(
         entry.path
         for entry in os.scandir(directory)
         if entry.is_file() and entry.name.lower().endswith(FASTA_SUFFIXES)
     )
+    if af_method == "boltz":
+        for yaml_file in yaml_files:
+            validate_boltz_yaml(yaml_file)
     warnings = []
     seen_normalised_hashes = {}
     for fasta_file in fasta_files:
@@ -479,6 +548,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except NoCompatibleInputsError as error:
+    except (InputValidationError, NoCompatibleInputsError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         sys.exit(2)
