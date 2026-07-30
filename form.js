@@ -11,6 +11,10 @@
       hideWhenUnchecked: new Set(COLABFOLD_ADVANCED_HIDE_TARGETS)
     },
   };
+  const HEADERLESS_SEQUENCE_ID_LENGTH = 6;
+  const AMINO_ACID_SEQUENCE_PATTERN = /^[ACDEFGHIKLMNPQRSTVWYX]+$/;
+  const ENTITY_TYPES = new Set(["protein", "ccd", "smiles", "dna", "rna"]);
+  const NON_PROTEIN_METHODS = new Set(["alphafold3", "boltz"]);
   const METHOD_TOKEN_LIMITS = {
     boltz: {
       title: "Boltz",
@@ -33,8 +37,6 @@
       limit: 600
     }
   };
-  const METHODS_REJECTING_UNKNOWN_RESIDUES = new Set(["boltz", "alphafold3"]);
-  const countUnknownResidues = (sequence) => (sequence.match(/X/g) || []).length;
 
   const escapeForSelector = (value) => {
     if (window.CSS && typeof window.CSS.escape === "function") {
@@ -471,12 +473,67 @@
     };
 
     const isFastaPath = (path) => /\.fa(?:sta)?$/i.test(path);
+    const isYamlPath = (path) => /\.ya?ml$/i.test(path);
+    const isCsvPath = (path) => /\.csv$/i.test(path);
+    const isDirectInputPath = (path) =>
+      isFastaPath(path) || isYamlPath(path) || isCsvPath(path);
+    const getInputKind = (path) => {
+      if (isFastaPath(path)) return "fasta";
+      if (isYamlPath(path)) return "yaml";
+      if (isCsvPath(path)) return "csv";
+      return null;
+    };
     const isSymbolicLink = (mode) => {
       const values = [Number(mode)];
       if (typeof mode === "string" && /^[0-7]+$/.test(mode)) {
         values.push(Number.parseInt(mode, 8));
       }
       return values.some((value) => (value & 0o170000) === 0o120000);
+    };
+    const inferEntityType = (header, sequence) => {
+      const proteinAlphabet = "ACDEFGHIKLMNPQRSTVWYX";
+      const isSubsetOf = (value, alphabet) =>
+        [...value].every((character) => alphabet.includes(character));
+      const taggedEntityType = header?.toLowerCase().split("|")[1];
+      if (ENTITY_TYPES.has(taggedEntityType)) return taggedEntityType;
+      if (sequence.includes(":")) {
+        return sequence.split(":").every(
+          (chain) => chain && isSubsetOf(chain, proteinAlphabet)
+        )
+          ? "protein"
+          : "unknown";
+      }
+      if (isSubsetOf(sequence, "ACUGN")) return "rna";
+      if (isSubsetOf(sequence, "ACTGN")) return "dna";
+      if (
+        isSubsetOf(sequence, proteinAlphabet) &&
+        !isSubsetOf(sequence, "ACUGTN")
+      ) return "protein";
+      if (/^[A-Za-z0-9@+\-\[\]()=#$%]+$/.test(sequence)) return "smiles";
+      return "unknown";
+    };
+    const validateEntitySequence = (entityType, sequence, label) => {
+      const patterns = {
+        dna: /^[ACTGN]+$/,
+        rna: /^[ACUGN]+$/,
+        smiles: /^[A-Za-z0-9@+\-\[\]()=#$%]+$/
+      };
+      if (entityType === "protein") {
+        const invalidResidues = [...new Set(sequence.replace(/:/g, ""))]
+          .filter((residue) => !AMINO_ACID_SEQUENCE_PATTERN.test(residue))
+          .sort()
+          .join("");
+        if (
+          sequence.split(":").some((chain) => !chain) ||
+          invalidResidues
+        ) {
+          throw new Error(
+            `${label} contains invalid amino acid character(s): ${invalidResidues || ":"}.`
+          );
+        }
+      } else if (patterns[entityType] && !patterns[entityType].test(sequence)) {
+        throw new Error(`${label} contains invalid ${entityType} characters.`);
+      }
     };
 
     const parseFasta = (contents, label) => {
@@ -489,7 +546,30 @@
       let normalisedSequenceLines = 0;
       let normalisedLineEndings = 0;
       let removedSequenceWhitespace = 0;
+      let removedTerminalStops = 0;
+      let addedHeader = "";
+      let header = null;
       const linePattern = /([^\r\n]*)(\r\n|\r|\n|$)/g;
+      const normaliseRecord = (record, recordHeader) => {
+        let normalisedRecord = record;
+        const chains = normalisedRecord.split(":");
+        const strippedRecord = chains
+          .map((chain) => (chain.endsWith("*") ? chain.slice(0, -1) : chain))
+          .join(":");
+        if (strippedRecord && inferEntityType(recordHeader, strippedRecord) === "protein") {
+          removedTerminalStops += chains.filter((chain) => chain.endsWith("*")).length;
+          normalisedRecord = strippedRecord;
+        }
+        if (!normalisedRecord) {
+          throw new Error(`${label} has a FASTA record with no sequence.`);
+        }
+        const entityType = inferEntityType(recordHeader, normalisedRecord);
+        if (entityType === "unknown") {
+          throw new Error(`${label} contains an unsupported entity sequence.`);
+        }
+        validateEntitySequence(entityType, normalisedRecord, label);
+        return { sequence: normalisedRecord, entityType };
+      };
 
       while (linePattern.lastIndex < contents.length) {
         const match = linePattern.exec(contents);
@@ -512,17 +592,21 @@
           if (!line.slice(1).trim()) {
             throw new Error(`${label} has an empty FASTA header.`);
           }
-          if (hasHeader) records.push(sequence);
+          if (hasHeader) records.push(normaliseRecord(sequence, header));
           if (rawLine !== `>${line.slice(1).trim()}\n`) normalisedHeaders += 1;
           hasHeader = true;
+          header = line.slice(1).trim();
           sequence = "";
           continue;
         }
-        if (!hasHeader) {
-          throw new Error(`${label} contains sequence data before its first FASTA header.`);
-        }
         const normalisedSequence = rawLine.replace(/[\s\uFEFF\u200B]/gu, "");
         if (normalisedSequence) {
+          if (!hasHeader) {
+            addedHeader = normalisedSequence.slice(0, HEADERLESS_SEQUENCE_ID_LENGTH);
+            hasHeader = true;
+            header = null;
+            sequence = "";
+          }
           if (rawLine !== `${normalisedSequence}\n`) {
             normalisedSequenceLines += 1;
             removedSequenceWhitespace += rawText.length - normalisedSequence.length;
@@ -533,12 +617,16 @@
 
       if (!hasHeader) throw new Error(`${label} has no FASTA header.`);
       if (!sequence) throw new Error(`${label} has a final FASTA record with no sequence.`);
-      records.push(sequence);
+      records.push(normaliseRecord(sequence, header));
       blankLines -= trailingBlankLines;
       const changes = [];
       if (blankLines) changes.push(`remove ${blankLines} blank line(s)`);
       if (normalisedLineEndings) changes.push(`standardise line endings in ${normalisedLineEndings} line(s)`);
       if (normalisedHeaders) changes.push(`tidy ${normalisedHeaders} FASTA header(s)`);
+      if (addedHeader) changes.push(`add FASTA header ${addedHeader}`);
+      if (removedTerminalStops) {
+        changes.push(`remove terminal stop codon from ${removedTerminalStops} FASTA record(s)`);
+      }
       if (normalisedSequenceLines) {
         const characterCount = removedSequenceWhitespace
           ? ` (${removedSequenceWhitespace} whitespace character(s))`
@@ -546,9 +634,9 @@
         changes.push(`remove whitespace from ${normalisedSequenceLines} sequence line(s)${characterCount}`);
       }
       return {
-        sequenceKey: JSON.stringify(records),
-        sequenceLength: records.reduce((total, record) => total + record.length, 0),
-        unknownResidueCount: records.reduce((total, record) => total + countUnknownResidues(record), 0),
+        sequenceKey: JSON.stringify(records.map((record) => record.sequence)),
+        sequenceLength: records.reduce((total, record) => total + record.sequence.length, 0),
+        entityTypes: [...new Set(records.map((record) => record.entityType))],
         changes
       };
     };
@@ -558,8 +646,8 @@
       marker.hidden = warnings.length === 0 && !checked;
       marker.textContent = warnings.length ? "!" : "\u2713";
       marker.style.fontSize = "1rem";
-      marker.title = message || "FASTA input checked; no sanitisation is required.";
-      marker.setAttribute("aria-label", message || "FASTA input checked; no sanitisation is required.");
+      marker.title = message || "Input checked; no sanitisation is required.";
+      marker.setAttribute("aria-label", message || "Input checked; no sanitisation is required.");
       marker.style.background = needsAttention ? "#dc3545" : (warnings.length ? "#ffc107" : "#198754");
       marker.style.color = warnings.length && !needsAttention ? "#212529" : "#ffffff";
       summary.hidden = warnings.length === 0;
@@ -586,37 +674,48 @@
     const setChecking = () => {
       marker.hidden = false;
       marker.textContent = "...";
-      marker.title = "Checking FASTA input";
-      marker.setAttribute("aria-label", "Checking FASTA input");
+      marker.title = "Checking input";
+      marker.setAttribute("aria-label", "Checking input");
       marker.style.background = "#6c757d";
       marker.style.color = "#ffffff";
       marker.style.fontSize = "0.7rem";
       summary.hidden = false;
       summary.className = "alert alert-info";
-      summary.replaceChildren("Checking FASTA input...");
+      summary.replaceChildren("Checking input...");
     };
 
     const methodControl = getFieldControl("af_method", "select");
-    const getUnknownResidueWarning = (count, label) => {
-      const method = methodControl?.value;
-      const methodInfo = METHOD_TOKEN_LIMITS[method];
-      if (!count || !methodInfo || !METHODS_REJECTING_UNKNOWN_RESIDUES.has(method)) return null;
-      return `${label} contains ${count} unknown X residue(s), which ${methodInfo.title} does not support.`;
-    };
+    const stripTerminalStops = (sequence) =>
+      sequence
+        .split(":")
+        .map((chain) => (chain.endsWith("*") ? chain.slice(0, -1) : chain))
+        .join(":");
+    const normaliseManualSequence = (value) =>
+      stripTerminalStops(value.replace(/[\s\uFEFF\u200B]/gu, ""));
+    const isManualSequence = (sequence) =>
+      sequence.split(":").every((chain) => AMINO_ACID_SEQUENCE_PATTERN.test(chain));
     const getManualSequenceWarnings = (value) => {
       const removableCharacters = value.match(/[\s\uFEFF\u200B]/gu) || [];
-      const sequence = value.replace(/[\s\uFEFF\u200B]/gu, "");
-      if (!/^[A-Z:*-]+$/.test(sequence)) return [];
+      const sequence = normaliseManualSequence(value);
+      const terminalStops = value
+        .replace(/[\s\uFEFF\u200B]/gu, "")
+        .split(":")
+        .filter((chain) => chain.endsWith("*")).length;
+      if (!sequence) return [];
+      if (!isManualSequence(sequence)) {
+        return ["Enter a valid amino-acid sequence or an absolute input path."];
+      }
       const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
       const sequenceLength = sequence.replace(/:/g, "").length;
-      const unknownResidueWarning = getUnknownResidueWarning(
-        countUnknownResidues(sequence),
-        "Manual sequence"
-      );
-      const warnings = unknownResidueWarning ? [unknownResidueWarning] : [];
+      const warnings = [];
       if (removableCharacters.length) {
         warnings.push(
           `Manual sequence: remove ${removableCharacters.length} whitespace character(s).`
+        );
+      }
+      if (terminalStops) {
+        warnings.push(
+          `Manual sequence: remove terminal stop codon from ${terminalStops} chain(s).`
         );
       }
       if (limit && sequenceLength > limit.limit) {
@@ -626,22 +725,76 @@
       }
       return warnings;
     };
+    const unsupportedEntityTypes = (file) =>
+      (file.entityTypes || []).filter(
+        (entityType) =>
+          entityType !== "protein" &&
+          !NON_PROTEIN_METHODS.has(methodControl?.value)
+      );
+    const getFileSeverity = (file, limit) => {
+      if (file.error) return "error";
+      if (unsupportedEntityTypes(file).length) {
+        return file.directoryInput ? "review" : "error";
+      }
+      if (
+        file.kind === "yaml" &&
+        methodControl?.value !== "boltz"
+      ) {
+        return file.ignoredForMethod ? "review" : "error";
+      }
+      if (
+        file.symbolicLink ||
+        file.ignoredForMethod ||
+        (limit && file.sequenceLength > limit.limit)
+      ) {
+        return "review";
+      }
+      return "none";
+    };
+    const getCheckedFilesState = (checkedFiles) => {
+      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
+      let needsAttention = false;
+      let requiresReview = false;
+      checkedFiles.forEach((file) => {
+        const severity = getFileSeverity(file, limit);
+        needsAttention ||= severity === "error";
+        requiresReview ||= severity === "review";
+      });
+      return { needsAttention, requiresReview };
+    };
     const buildWarnings = (checkedFiles) => {
       const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
       const seen = new Map();
-      const warnings = checkedFiles.flatMap((file) => {
+      return checkedFiles.flatMap((file) => {
+        if (file.ignoredForMethod) {
+          return [`${file.label}: YAML input will be ignored unless Boltz is selected.`];
+        }
         if (file.symbolicLink) {
           return [`${file.label}: symbolic link; its target will be followed when the run starts.`];
         }
+        if (file.kind === "yaml") {
+          return methodControl?.value === "boltz"
+            ? []
+            : [`${file.label}: YAML input is only supported by Boltz.`];
+        }
+        if (file.kind === "csv") return [];
         if (file.error) return [file.error];
+        const unsupportedTypes = unsupportedEntityTypes(file);
+        if (unsupportedTypes.length) {
+          return [
+            file.directoryInput
+              ? `${file.label}: ${unsupportedTypes.join(", ")} input will be ignored unless AlphaFold3 or Boltz is selected.`
+              : `${file.label}: ${unsupportedTypes.join(", ")} input is only supported by AlphaFold3 or Boltz.`
+          ];
+        }
+        const original = seen.get(file.sequenceKey);
+        if (original) {
+          return [`${file.label}: duplicate sequence of ${original}; this file will be skipped.`];
+        }
+        seen.set(file.sequenceKey, file.label);
         const fileWarnings = file.changes.length
           ? [`${file.label}: ${file.changes.join(", ")}.`]
           : [];
-        const unknownResidueWarning = getUnknownResidueWarning(
-          file.unknownResidueCount,
-          file.label
-        );
-        if (unknownResidueWarning) fileWarnings.push(unknownResidueWarning);
         if (limit && file.sequenceLength > limit.limit) {
           fileWarnings.push(
             `${file.label}: total sequence length ${file.sequenceLength.toLocaleString()} residues exceeds the ${limit.title} approximate limit of ${limit.limit.toLocaleString()}.`
@@ -649,44 +802,36 @@
         }
         return fileWarnings;
       });
-      checkedFiles.filter((file) => !file.error && !file.symbolicLink).forEach((file) => {
-        const original = seen.get(file.sequenceKey);
-        if (original) warnings.push(`${file.label}: duplicate sequence of ${original}; this file will be skipped.`);
-        else seen.set(file.sequenceKey, file.label);
-      });
-      return warnings;
     };
-    const requiresReview = (checkedFiles) => {
-      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
-      return checkedFiles.some((file) =>
-        file.error || file.symbolicLink || (limit && file.sequenceLength > limit.limit)
-      );
-    };
-    const hasUnsupportedUnknownResidues = (checkedFiles) =>
-      checkedFiles.some((file) => getUnknownResidueWarning(file.unknownResidueCount, file.label));
-
-    const getDirectoryFastaFiles = async (directoryPath, directoryUrl) => {
+    const getDirectoryFiles = async (directoryPath, directoryUrl, signal) => {
       const response = await fetch(directoryUrl, {
         credentials: "same-origin",
-        headers: { Accept: "application/json" }
+        headers: { Accept: "application/json" },
+        signal
       });
       if (!response.ok) throw new Error(`Could not list ${directoryPath} (${response.status}).`);
 
       const listing = await response.json();
       return (listing.files || [])
-        .filter((file) => file.type === "f" && isFastaPath(file.name) && file.url)
+        .filter((file) => file.type === "f" && file.url)
         .map((file) => ({
           url: file.url,
           label: file.name,
+          kind: getInputKind(file.name),
           symbolicLink: file.symlink === true || file.symbolic_link === true || isSymbolicLink(file.mode)
-        }));
+        }))
+        .sort((left, right) => (left.label < right.label ? -1 : left.label > right.label ? 1 : 0));
     };
 
-    const getDirectFastaFile = async (path) => {
+    const getDirectInputFile = async (path, signal) => {
       const separator = path.lastIndexOf("/");
       const directoryPath = separator === 0 ? "/" : path.slice(0, separator);
       const fileName = path.slice(separator + 1);
-      const files = await getDirectoryFastaFiles(directoryPath, buildFilesUrl(directoryPath));
+      const files = await getDirectoryFiles(
+        directoryPath,
+        buildFilesUrl(directoryPath),
+        signal
+      );
       const file = files.find((candidate) => candidate.label === fileName);
       if (!file) throw new Error(`File not found: ${path}`);
       return file;
@@ -713,36 +858,34 @@
     let lastNeedsAttention = false;
     let lastRequiresReview = false;
     let lastCheckedFiles = null;
-    const preflight = async () => {
+    let activeController = null;
+    const preflight = async (forceRefresh = false) => {
       const request = ++requestNumber;
+      const controller = new AbortController();
+      activeController = controller;
       const rawInput = input.value;
       const path = rawInput.trim();
       if (!path.startsWith("/")) {
+        const sequence = normaliseManualSequence(rawInput);
         lastCheckedPath = rawInput;
         lastWarnings = getManualSequenceWarnings(rawInput);
-        lastNeedsAttention = Boolean(getUnknownResidueWarning(
-          countUnknownResidues(rawInput.replace(/[\s\uFEFF\u200B]/gu, "")),
-          "Manual sequence"
-        ));
+        lastNeedsAttention = Boolean(sequence) && !isManualSequence(sequence);
         lastRequiresReview = lastWarnings.length > 0 && !lastNeedsAttention;
         lastCheckedFiles = null;
-        setWarnings(lastWarnings, false, lastNeedsAttention, lastRequiresReview);
+        setWarnings(
+          lastWarnings,
+          Boolean(sequence),
+          lastNeedsAttention,
+          lastRequiresReview
+        );
         return;
       }
-      if (/\.(?:csv|ya?ml)$/i.test(path)) {
-        lastCheckedPath = path;
-        lastWarnings = [];
-        lastNeedsAttention = false;
-        lastRequiresReview = false;
-        lastCheckedFiles = null;
-        setWarnings([]);
-        return;
-      }
-      if (path === lastCheckedPath && lastWarnings !== null) {
+      if (!forceRefresh && path === lastCheckedPath && lastWarnings !== null) {
         if (lastCheckedFiles) {
           lastWarnings = buildWarnings(lastCheckedFiles);
-          lastNeedsAttention = hasUnsupportedUnknownResidues(lastCheckedFiles);
-          lastRequiresReview = requiresReview(lastCheckedFiles);
+          const state = getCheckedFilesState(lastCheckedFiles);
+          lastNeedsAttention = state.needsAttention;
+          lastRequiresReview = state.requiresReview;
         }
         setWarnings(lastWarnings, true, lastNeedsAttention, lastRequiresReview);
         return;
@@ -750,41 +893,70 @@
 
       try {
         const filesUrl = buildFilesUrl(path);
-        const files = isFastaPath(path)
-          ? [await getDirectFastaFile(path)]
-          : await getDirectoryFastaFiles(path, filesUrl);
+        const directInput = isDirectInputPath(path);
+        const directoryFiles = directInput
+          ? []
+          : await getDirectoryFiles(path, filesUrl, controller.signal);
+        const files = directInput
+          ? [await getDirectInputFile(path, controller.signal)]
+          : directoryFiles.filter((file) =>
+            file.kind === "fasta" ||
+            (file.kind === "yaml" && methodControl?.value === "boltz")
+          );
+        files.forEach((file) => {
+          file.directoryInput = !directInput;
+        });
+        const ignoredYamlFiles = methodControl?.value === "boltz"
+          ? []
+          : directoryFiles
+            .filter((file) => file.kind === "yaml")
+            .map((file) => ({ ...file, ignoredForMethod: true }));
         if (request !== requestNumber) return;
         if (!files.length) {
-          const warnings = ["No FASTA files (.fa or .fasta) were found in this directory."];
+          const yamlFiles = directoryFiles.filter((file) => file.kind === "yaml");
+          const expectedInputs = methodControl?.value === "boltz"
+            ? "FASTA or YAML input files"
+            : "FASTA files (.fa or .fasta)";
+          const warnings = yamlFiles.length && methodControl?.value !== "boltz"
+            ? yamlFiles.map((file) => `${file.label}: YAML input is only supported by Boltz.`)
+            : [`No compatible ${expectedInputs} were found in this directory.`];
           lastCheckedPath = path;
           lastWarnings = warnings;
           lastNeedsAttention = true;
           lastRequiresReview = false;
-          lastCheckedFiles = null;
-          setWarnings(warnings, false, true);
+          lastCheckedFiles = yamlFiles.length ? yamlFiles : null;
+          setWarnings(warnings, yamlFiles.length > 0, true);
           return;
         }
 
         const checkedFiles = await mapWithConcurrency(files, 6, async (file) => {
+          if (file.kind !== "fasta") return file;
           if (file.symbolicLink) return { ...file, symbolicLink: true };
           try {
-            const response = await fetch(file.url, { credentials: "same-origin" });
+            const response = await fetch(file.url, {
+              credentials: "same-origin",
+              signal: controller.signal
+            });
             if (!response.ok) throw new Error(`Could not read ${file.label} (${response.status}).`);
             return { ...file, ...parseFasta(await response.text(), file.label) };
           } catch (error) {
+            if (error.name === "AbortError") throw error;
             return { ...file, error: error.message };
           }
         });
         if (request !== requestNumber) return;
+        checkedFiles.push(...ignoredYamlFiles);
 
         const warnings = buildWarnings(checkedFiles);
         lastCheckedPath = path;
         lastWarnings = warnings;
-        lastNeedsAttention = hasUnsupportedUnknownResidues(checkedFiles);
-        lastRequiresReview = requiresReview(checkedFiles);
+        const state = getCheckedFilesState(checkedFiles);
+        lastNeedsAttention = state.needsAttention;
+        lastRequiresReview = state.requiresReview;
         lastCheckedFiles = checkedFiles;
         setWarnings(warnings, true, lastNeedsAttention, lastRequiresReview);
       } catch (error) {
+        if (error.name === "AbortError") return;
         if (request !== requestNumber) return;
         const warnings = [`Could not check this input: ${error.message}`];
         lastCheckedPath = path;
@@ -796,29 +968,41 @@
       }
     };
 
-    const schedulePreflight = () => {
+    const schedulePreflight = (forceRefresh = false) => {
       requestNumber += 1;
+      if (activeController) activeController.abort();
       if (preflightTimer) window.clearTimeout(preflightTimer);
       setChecking();
-      preflightTimer = window.setTimeout(preflight, 250);
+      preflightTimer = window.setTimeout(() => preflight(forceRefresh), 250);
     };
 
     if (input.dataset.oodInputPreflightBound !== "1") {
-      input.addEventListener("input", schedulePreflight);
+      input.addEventListener("input", () => schedulePreflight(true));
       input.dataset.oodInputPreflightBound = "1";
     }
     if (methodControl && methodControl.dataset.oodInputLengthBound !== "1") {
       methodControl.addEventListener("change", () => {
-        if (lastCheckedFiles) {
+        const currentPath = input.value.trim();
+        const isDirectoryPath =
+          currentPath.startsWith("/") && !isDirectInputPath(currentPath);
+        if (isDirectoryPath) {
+          schedulePreflight(true);
+        } else if (lastCheckedFiles) {
           lastWarnings = buildWarnings(lastCheckedFiles);
-          lastNeedsAttention = hasUnsupportedUnknownResidues(lastCheckedFiles);
-          lastRequiresReview = requiresReview(lastCheckedFiles);
+          const state = getCheckedFilesState(lastCheckedFiles);
+          lastNeedsAttention = state.needsAttention;
+          lastRequiresReview = state.requiresReview;
           setWarnings(lastWarnings, true, lastNeedsAttention, lastRequiresReview);
         } else {
           schedulePreflight();
         }
       });
       methodControl.dataset.oodInputLengthBound = "1";
+    }
+
+    if (input.value.trim() && input.dataset.oodInputPreflightInitialised !== "1") {
+      input.dataset.oodInputPreflightInitialised = "1";
+      schedulePreflight();
     }
   };
 
