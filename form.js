@@ -434,10 +434,23 @@
 
   const initInputPreflight = () => {
     const input = getFieldControl("samplesheet");
-    if (!input) return;
+    if (!input || input.dataset.oodInputPreflightBound === "1") return;
+    input.dataset.oodInputPreflightBound = "1";
 
-    const urlTemplate = "/pun/sys/dashboard/files/fs/__PATH_SEGMENTS__";
+    const methodControl = getFieldControl("af_method", "select");
     const fieldContainer = getFieldContainer(input);
+    const fileKinds = [
+      [/\.fa(?:sta)?$/i, "fasta"],
+      [/\.ya?ml$/i, "yaml"],
+      [/\.csv$/i, "csv"]
+    ];
+    const boltzEntityTypes = new Set(["protein", "dna", "rna", "ligand"]);
+    const entityPatterns = {
+      dna: /^[ACTGN]+$/,
+      rna: /^[ACUGN]+$/,
+      smiles: /^[A-Za-z0-9@+\-\[\]()=#$%]+$/
+    };
+    const severityOrder = { pass: 0, adjustment: 1, review: 2, error: 3 };
     let marker = document.getElementById("ood-proteinfold-input-warning");
     let summary = document.getElementById("ood-proteinfold-input-warning-summary");
 
@@ -445,44 +458,84 @@
       marker = document.createElement("button");
       marker.id = "ood-proteinfold-input-warning";
       marker.type = "button";
-      marker.textContent = "!";
       marker.hidden = true;
       marker.setAttribute("aria-label", "Input warnings");
       marker.style.cssText = "margin-left: 0.5rem; border: 0; border-radius: 50%; width: 1.4rem; height: 1.4rem; padding: 0; background: #ffc107; color: #212529; font-weight: 700; cursor: help;";
       input.insertAdjacentElement("afterend", marker);
     }
-
     if (!summary) {
       summary = document.createElement("div");
       summary.id = "ood-proteinfold-input-warning-summary";
       summary.hidden = true;
-      summary.className = "alert alert-warning";
       summary.setAttribute("role", "alert");
       summary.style.marginTop = "0.5rem";
       marker.insertAdjacentElement("afterend", summary);
     }
 
-    const buildFilesUrl = (path) => {
-      const withoutLeadingSlash = path.replace(/^\/+/, "");
-      const segments = withoutLeadingSlash
-        .split("/")
-        .filter(Boolean)
-        .map(encodeURIComponent)
-        .join("/");
-      return urlTemplate.replace(/__PATH_SEGMENTS__/g, segments);
+    const getInputKind = (path) =>
+      fileKinds.find(([pattern]) => pattern.test(path))?.[1] || null;
+    const removeWhitespace = (value) =>
+      value.replace(/[\s\uFEFF\u200B]/gu, "");
+    const stripTerminalStops = (sequence) =>
+      sequence
+        .split(":")
+        .map((chain) => (chain.endsWith("*") ? chain.slice(0, -1) : chain))
+        .join(":");
+    const isSubsetOf = (value, alphabet) =>
+      [...value].every((character) => alphabet.includes(character));
+    const increaseSeverity = (current, candidate) =>
+      severityOrder[candidate] > severityOrder[current] ? candidate : current;
+    const errorResult = (message) => ({ messages: [message], severity: "error" });
+
+    const render = ({ messages = [], severity = "pass", checked = true }) => {
+      const message = messages.join("\n");
+      const hasWarnings = messages.length > 0;
+      const needsAttention = severity === "error";
+      marker.hidden = !checked && !hasWarnings;
+      marker.textContent = hasWarnings ? "!" : "\u2713";
+      marker.style.fontSize = "1rem";
+      marker.title = message || "Input checked; no sanitisation is required.";
+      marker.setAttribute("aria-label", marker.title);
+      marker.style.background = needsAttention
+        ? "#dc3545"
+        : (hasWarnings ? "#ffc107" : "#198754");
+      marker.style.color = hasWarnings && !needsAttention ? "#212529" : "#ffffff";
+      summary.hidden = !hasWarnings;
+      summary.className = needsAttention ? "alert alert-danger" : "alert alert-warning";
+      summary.replaceChildren();
+      if (hasWarnings) {
+        const heading = document.createElement("strong");
+        heading.textContent = needsAttention
+          ? "Input needs attention before the run"
+          : (severity === "review"
+              ? "Review input before the run"
+              : "Input will be adjusted before the run");
+        const list = document.createElement("ul");
+        list.style.margin = "0.5rem 0 0";
+        messages.forEach((warning) => {
+          const item = document.createElement("li");
+          item.textContent = warning;
+          list.appendChild(item);
+        });
+        summary.append(heading, list);
+      }
+      fieldContainer?.classList.toggle("has-warning", hasWarnings && !needsAttention);
+      fieldContainer?.classList.toggle("has-error", needsAttention);
     };
 
-    const isFastaPath = (path) => /\.fa(?:sta)?$/i.test(path);
-    const isYamlPath = (path) => /\.ya?ml$/i.test(path);
-    const isCsvPath = (path) => /\.csv$/i.test(path);
-    const isDirectInputPath = (path) =>
-      isFastaPath(path) || isYamlPath(path) || isCsvPath(path);
-    const getInputKind = (path) => {
-      if (isFastaPath(path)) return "fasta";
-      if (isYamlPath(path)) return "yaml";
-      if (isCsvPath(path)) return "csv";
-      return null;
+    const renderChecking = () => {
+      marker.hidden = false;
+      marker.textContent = "...";
+      marker.title = "Checking input";
+      marker.setAttribute("aria-label", marker.title);
+      marker.style.background = "#6c757d";
+      marker.style.color = "#ffffff";
+      marker.style.fontSize = "0.7rem";
+      summary.hidden = false;
+      summary.className = "alert alert-info";
+      summary.replaceChildren("Checking input...");
     };
+
     const parseSamplesheet = (contents) => {
       const rows = [];
       let row = [];
@@ -494,17 +547,21 @@
           if (quoted && contents[index + 1] === "\"") {
             field += "\"";
             index += 1;
-          } else quoted = !quoted;
+          } else {
+            quoted = !quoted;
+          }
         } else if (character === "," && !quoted) {
           row.push(field);
           field = "";
-        } else if ((character === "\n" || character === "\r") && !quoted) {
+        } else if (/[\r\n]/.test(character) && !quoted) {
           if (character === "\r" && contents[index + 1] === "\n") index += 1;
           row.push(field);
           if (row.some((value) => value.trim())) rows.push(row);
           row = [];
           field = "";
-        } else field += character;
+        } else {
+          field += character;
+        }
       }
       if (quoted) throw new Error("Samplesheet contains an unterminated quoted field.");
       row.push(field);
@@ -519,20 +576,22 @@
         return { path, rowNumber: index + 2 };
       });
     };
+
     const resolveSamplesheetPath = (samplesheetPath, referencedPath) => {
-      const base = referencedPath.startsWith("/")
+      const parts = referencedPath.startsWith("/")
         ? []
         : samplesheetPath.slice(0, samplesheetPath.lastIndexOf("/")).split("/");
       referencedPath.split("/").forEach((part) => {
-        if (!part || part === ".") return;
-        if (part === "..") base.pop();
-        else base.push(part);
+        if (part === "..") parts.pop();
+        else if (part && part !== ".") parts.push(part);
       });
-      return `/${base.filter(Boolean).join("/")}`;
+      return `/${parts.filter(Boolean).join("/")}`;
     };
+
     const validateBoltzYaml = (contents, label) => {
       const entries = [];
       let sequencesIndent = null;
+      let entryIndent = null;
       let currentEntry = null;
       contents.split(/\r\n|\r|\n/).forEach((rawLine) => {
         const line = rawLine.replace(/\s+#.*$/, "");
@@ -540,58 +599,51 @@
         const indent = line.length - line.trimStart().length;
         if (/^sequences:\s*$/.test(line)) {
           sequencesIndent = indent;
+          entryIndent = null;
           currentEntry = null;
-          return;
+        } else if (sequencesIndent !== null && indent <= sequencesIndent) {
+          sequencesIndent = null;
+          currentEntry = null;
+        } else if (sequencesIndent !== null) {
+          const entity = line.trim().match(/^-\s+([^:]+):\s*$/);
+          const field = line.trim().match(/^(id|sequence|smiles|ccd):\s*(.+)$/);
+          if (entity && (entryIndent === null || indent === entryIndent)) {
+            entryIndent ??= indent;
+            currentEntry = { type: entity[1], fields: {} };
+            entries.push(currentEntry);
+          } else if (currentEntry && field) {
+            currentEntry.fields[field[1]] = field[2].trim();
+          }
         }
-        if (sequencesIndent === null || indent <= sequencesIndent) return;
-        const entity = line.trim().match(/^-\s+([^:]+):\s*$/);
-        if (entity) {
-          currentEntry = { type: entity[1], index: entries.length + 1, fields: {} };
-          entries.push(currentEntry);
-          return;
-        }
-        const field = line.trim().match(/^(id|sequence|smiles|ccd):\s*(.+)$/);
-        if (currentEntry && field) currentEntry.fields[field[1]] = field[2].trim();
       });
-      if (sequencesIndent === null || !entries.length) {
+      if (!entries.length) {
         throw new Error(`${label} must contain a non-empty sequences list.`);
       }
-      entries.forEach((entry) => {
-        if (!new Set(["protein", "dna", "rna", "ligand"]).has(entry.type)) {
-          throw new Error(`${label} has unsupported Boltz entity type: ${entry.type}.`);
+      entries.forEach(({ type, fields }, index) => {
+        const entry = `${label} ${type} entry ${index + 1}`;
+        if (!boltzEntityTypes.has(type)) {
+          throw new Error(`${label} has unsupported Boltz entity type: ${type}.`);
         }
-        if (!entry.fields.id || entry.fields.id === "[]") {
-          throw new Error(`${label} ${entry.type} entry ${entry.index} is missing id.`);
+        if (!fields.id || fields.id === "[]") {
+          throw new Error(`${entry} is missing id.`);
         }
-        if (["protein", "dna", "rna"].includes(entry.type) && !entry.fields.sequence) {
-          throw new Error(`${label} ${entry.type} entry ${entry.index} is missing sequence.`);
+        if (["protein", "dna", "rna"].includes(type) && !fields.sequence) {
+          throw new Error(`${entry} is missing sequence.`);
         }
-        if (entry.type === "ligand" && Boolean(entry.fields.smiles) === Boolean(entry.fields.ccd)) {
-          throw new Error(
-            `${label} ligand entry ${entry.index} must contain exactly one of smiles or ccd.`
-          );
+        if (type === "ligand" && Boolean(fields.smiles) === Boolean(fields.ccd)) {
+          throw new Error(`${entry} must contain exactly one of smiles or ccd.`);
         }
       });
     };
-    const isSymbolicLink = (mode) => {
-      const values = [Number(mode)];
-      if (typeof mode === "string" && /^[0-7]+$/.test(mode)) {
-        values.push(Number.parseInt(mode, 8));
-      }
-      return values.some((value) => (value & 0o170000) === 0o120000);
-    };
+
     const inferEntityType = (header, sequence) => {
       const proteinAlphabet = "ACDEFGHIKLMNPQRSTVWYX";
-      const isSubsetOf = (value, alphabet) =>
-        [...value].every((character) => alphabet.includes(character));
-      const taggedEntityType = header?.toLowerCase().split("|")[1];
-      if (ENTITY_TYPES.has(taggedEntityType)) return taggedEntityType;
+      const taggedType = header?.toLowerCase().split("|")[1];
+      if (ENTITY_TYPES.has(taggedType)) return taggedType;
       if (sequence.includes(":")) {
         return sequence.split(":").every(
           (chain) => chain && isSubsetOf(chain, proteinAlphabet)
-        )
-          ? "protein"
-          : "unknown";
+        ) ? "protein" : "unknown";
       }
       if (isSubsetOf(sequence, "ACUGN")) return "rna";
       if (isSubsetOf(sequence, "ACTGN")) return "dna";
@@ -599,314 +651,244 @@
         isSubsetOf(sequence, proteinAlphabet) &&
         !isSubsetOf(sequence, "ACUGTN")
       ) return "protein";
-      if (/^[A-Za-z0-9@+\-\[\]()=#$%]+$/.test(sequence)) return "smiles";
-      return "unknown";
+      return entityPatterns.smiles.test(sequence) ? "smiles" : "unknown";
     };
+
     const validateEntitySequence = (entityType, sequence, label) => {
-      const patterns = {
-        dna: /^[ACTGN]+$/,
-        rna: /^[ACUGN]+$/,
-        smiles: /^[A-Za-z0-9@+\-\[\]()=#$%]+$/
-      };
       if (entityType === "protein") {
         const invalidResidues = [...new Set(sequence.replace(/:/g, ""))]
           .filter((residue) => !AMINO_ACID_SEQUENCE_PATTERN.test(residue))
           .sort()
           .join("");
-        if (
-          sequence.split(":").some((chain) => !chain) ||
-          invalidResidues
-        ) {
+        if (sequence.split(":").some((chain) => !chain) || invalidResidues) {
           throw new Error(
             `${label} contains invalid amino acid character(s): ${invalidResidues || ":"}.`
           );
         }
-      } else if (patterns[entityType] && !patterns[entityType].test(sequence)) {
+      } else if (entityPatterns[entityType] && !entityPatterns[entityType].test(sequence)) {
         throw new Error(`${label} contains invalid ${entityType} characters.`);
       }
     };
 
     const parseFasta = (contents, label) => {
       const records = [];
-      let sequence = "";
-      let hasHeader = false;
-      let blankLines = 0;
-      let trailingBlankLines = 0;
-      let normalisedHeaders = 0;
-      let normalisedSequenceLines = 0;
-      let normalisedLineEndings = 0;
-      let removedSequenceWhitespace = 0;
-      let removedTerminalStops = 0;
-      let addedHeader = "";
+      const changes = {
+        blankLines: 0,
+        trailingBlankLines: 0,
+        headers: 0,
+        sequenceLines: 0,
+        lineEndings: 0,
+        whitespace: 0,
+        terminalStops: 0,
+        addedHeader: ""
+      };
       let header = null;
-      const linePattern = /([^\r\n]*)(\r\n|\r|\n|$)/g;
-      const normaliseRecord = (record, recordHeader) => {
-        let normalisedRecord = record;
-        const chains = normalisedRecord.split(":");
-        const strippedRecord = chains
-          .map((chain) => (chain.endsWith("*") ? chain.slice(0, -1) : chain))
-          .join(":");
-        if (strippedRecord && inferEntityType(recordHeader, strippedRecord) === "protein") {
-          removedTerminalStops += chains.filter((chain) => chain.endsWith("*")).length;
-          normalisedRecord = strippedRecord;
+      let sequence = "";
+      let hasRecord = false;
+
+      const finishRecord = () => {
+        const chains = sequence.split(":");
+        const withoutStops = stripTerminalStops(sequence);
+        if (withoutStops && inferEntityType(header, withoutStops) === "protein") {
+          changes.terminalStops += chains.filter((chain) => chain.endsWith("*")).length;
+          sequence = withoutStops;
         }
-        if (!normalisedRecord) {
-          throw new Error(`${label} has a FASTA record with no sequence.`);
-        }
-        const entityType = inferEntityType(recordHeader, normalisedRecord);
+        if (!sequence) throw new Error(`${label} has a FASTA record with no sequence.`);
+        const entityType = inferEntityType(header, sequence);
         if (entityType === "unknown") {
           throw new Error(`${label} contains an unsupported entity sequence.`);
         }
-        validateEntitySequence(entityType, normalisedRecord, label);
-        return { sequence: normalisedRecord, entityType };
+        validateEntitySequence(entityType, sequence, label);
+        records.push({ sequence, entityType });
       };
 
-      while (linePattern.lastIndex < contents.length) {
-        const match = linePattern.exec(contents);
-        if (!match) break;
-        const rawText = match[1];
-        const ending = match[2];
-        const rawLine = `${rawText}${ending}`;
-        if (ending === "\r\n" || ending === "\r") normalisedLineEndings += 1;
-        const line = rawLine.trim();
+      for (const match of contents.matchAll(/([^\r\n]*)(\r\n|\r|\n|$)/g)) {
+        if (!match[0]) continue;
+        const [, rawText, ending] = match;
+        if (ending === "\r\n" || ending === "\r") changes.lineEndings += 1;
+        const line = rawText.trim();
         if (!line) {
-          blankLines += 1;
-          trailingBlankLines += 1;
+          changes.blankLines += 1;
+          changes.trailingBlankLines += 1;
           continue;
         }
-        trailingBlankLines = 0;
+        changes.trailingBlankLines = 0;
         if (line.startsWith(">")) {
-          if (hasHeader && !sequence) {
-            throw new Error(`${label} has a FASTA record with no sequence.`);
-          }
-          if (!line.slice(1).trim()) {
-            throw new Error(`${label} has an empty FASTA header.`);
-          }
-          if (hasHeader) records.push(normaliseRecord(sequence, header));
-          if (rawText !== `>${line.slice(1).trim()}`) normalisedHeaders += 1;
-          hasHeader = true;
+          if (hasRecord) finishRecord();
           header = line.slice(1).trim();
+          if (!header) throw new Error(`${label} has an empty FASTA header.`);
+          if (rawText !== `>${header}`) changes.headers += 1;
           sequence = "";
+          hasRecord = true;
           continue;
         }
-        const normalisedSequence = rawLine.replace(/[\s\uFEFF\u200B]/gu, "");
-        if (normalisedSequence) {
-          if (!hasHeader) {
-            addedHeader = normalisedSequence.slice(0, HEADERLESS_SEQUENCE_ID_LENGTH);
-            hasHeader = true;
-            header = null;
-            sequence = "";
-          }
-          if (rawText !== normalisedSequence) {
-            normalisedSequenceLines += 1;
-            removedSequenceWhitespace += rawText.length - normalisedSequence.length;
-          }
-          sequence += normalisedSequence;
+
+        const normalisedLine = removeWhitespace(rawText);
+        if (!normalisedLine) continue;
+        if (!hasRecord) {
+          changes.addedHeader = normalisedLine.slice(0, HEADERLESS_SEQUENCE_ID_LENGTH);
+          header = null;
+          hasRecord = true;
         }
+        if (rawText !== normalisedLine) {
+          changes.sequenceLines += 1;
+          changes.whitespace += rawText.length - normalisedLine.length;
+        }
+        sequence += normalisedLine;
       }
 
-      if (!hasHeader) throw new Error(`${label} has no FASTA header.`);
-      if (!sequence) throw new Error(`${label} has a final FASTA record with no sequence.`);
-      records.push(normaliseRecord(sequence, header));
-      blankLines -= trailingBlankLines;
-      const changes = [];
-      if (blankLines) changes.push(`remove ${blankLines} blank line(s)`);
-      if (normalisedLineEndings) changes.push(`standardise line endings in ${normalisedLineEndings} line(s)`);
-      if (normalisedHeaders) changes.push(`tidy ${normalisedHeaders} FASTA header(s)`);
-      if (addedHeader) changes.push(`add FASTA header ${addedHeader}`);
-      if (removedTerminalStops) {
-        changes.push(`remove terminal stop codon from ${removedTerminalStops} FASTA record(s)`);
+      if (!hasRecord) throw new Error(`${label} has no FASTA header.`);
+      finishRecord();
+      const warnings = [];
+      const internalBlankLines = changes.blankLines - changes.trailingBlankLines;
+      if (internalBlankLines) warnings.push(`remove ${internalBlankLines} blank line(s)`);
+      if (changes.lineEndings) {
+        warnings.push(`standardise line endings in ${changes.lineEndings} line(s)`);
       }
-      if (normalisedSequenceLines) {
-        const characterCount = removedSequenceWhitespace
-          ? ` (${removedSequenceWhitespace} whitespace character(s))`
+      if (changes.headers) warnings.push(`tidy ${changes.headers} FASTA header(s)`);
+      if (changes.addedHeader) warnings.push(`add FASTA header ${changes.addedHeader}`);
+      if (changes.terminalStops) {
+        warnings.push(
+          `remove terminal stop codon from ${changes.terminalStops} FASTA record(s)`
+        );
+      }
+      if (changes.sequenceLines) {
+        const count = changes.whitespace
+          ? ` (${changes.whitespace} whitespace character(s))`
           : "";
-        changes.push(`remove whitespace from ${normalisedSequenceLines} sequence line(s)${characterCount}`);
+        warnings.push(`remove whitespace from ${changes.sequenceLines} sequence line(s)${count}`);
       }
       return {
         sequenceKey: JSON.stringify(records.map((record) => record.sequence)),
         sequenceLength: records.reduce((total, record) => total + record.sequence.length, 0),
         entityTypes: [...new Set(records.map((record) => record.entityType))],
-        changes
+        changes: warnings
       };
     };
 
-    const setWarnings = (warnings, checked = false, needsAttention = false, requiresReview = false) => {
-      const message = warnings.join("\n");
-      marker.hidden = warnings.length === 0 && !checked;
-      marker.textContent = warnings.length ? "!" : "\u2713";
-      marker.style.fontSize = "1rem";
-      marker.title = message || "Input checked; no sanitisation is required.";
-      marker.setAttribute("aria-label", message || "Input checked; no sanitisation is required.");
-      marker.style.background = needsAttention ? "#dc3545" : (warnings.length ? "#ffc107" : "#198754");
-      marker.style.color = warnings.length && !needsAttention ? "#212529" : "#ffffff";
-      summary.hidden = warnings.length === 0;
-      summary.className = needsAttention ? "alert alert-danger" : "alert alert-warning";
-      summary.replaceChildren();
-      if (warnings.length) {
-        const heading = document.createElement("strong");
-        heading.textContent = needsAttention
-          ? "Input needs attention before the run"
-          : (requiresReview ? "Review input before the run" : "Input will be adjusted before the run");
-        const list = document.createElement("ul");
-        list.style.margin = "0.5rem 0 0";
-        warnings.forEach((warning) => {
-          const item = document.createElement("li");
-          item.textContent = warning;
-          list.appendChild(item);
-        });
-        summary.append(heading, list);
+    const analyseManualInput = (value) => {
+      const whitespace = value.match(/[\s\uFEFF\u200B]/gu) || [];
+      const compact = removeWhitespace(value);
+      const terminalStops = compact.split(":").filter((chain) => chain.endsWith("*")).length;
+      const sequence = stripTerminalStops(compact);
+      if (!sequence) return { checked: false };
+      if (!sequence.split(":").every((chain) => AMINO_ACID_SEQUENCE_PATTERN.test(chain))) {
+        return errorResult("Enter a valid amino-acid sequence or an absolute input path.");
       }
-      if (fieldContainer) fieldContainer.classList.toggle("has-warning", warnings.length > 0 && !needsAttention);
-      if (fieldContainer) fieldContainer.classList.toggle("has-error", needsAttention);
-    };
 
-    const setChecking = () => {
-      marker.hidden = false;
-      marker.textContent = "...";
-      marker.title = "Checking input";
-      marker.setAttribute("aria-label", "Checking input");
-      marker.style.background = "#6c757d";
-      marker.style.color = "#ffffff";
-      marker.style.fontSize = "0.7rem";
-      summary.hidden = false;
-      summary.className = "alert alert-info";
-      summary.replaceChildren("Checking input...");
-    };
-
-    const methodControl = getFieldControl("af_method", "select");
-    const stripTerminalStops = (sequence) =>
-      sequence
-        .split(":")
-        .map((chain) => (chain.endsWith("*") ? chain.slice(0, -1) : chain))
-        .join(":");
-    const normaliseManualSequence = (value) =>
-      stripTerminalStops(value.replace(/[\s\uFEFF\u200B]/gu, ""));
-    const isManualSequence = (sequence) =>
-      sequence.split(":").every((chain) => AMINO_ACID_SEQUENCE_PATTERN.test(chain));
-    const getManualSequenceWarnings = (value) => {
-      const removableCharacters = value.match(/[\s\uFEFF\u200B]/gu) || [];
-      const sequence = normaliseManualSequence(value);
-      const terminalStops = value
-        .replace(/[\s\uFEFF\u200B]/gu, "")
-        .split(":")
-        .filter((chain) => chain.endsWith("*")).length;
-      if (!sequence) return [];
-      if (!isManualSequence(sequence)) {
-        return ["Enter a valid amino-acid sequence or an absolute input path."];
-      }
-      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
-      const sequenceLength = sequence.replace(/:/g, "").length;
-      const warnings = [];
-      if (removableCharacters.length) {
-        warnings.push(
-          `Manual sequence: remove ${removableCharacters.length} whitespace character(s).`
-        );
+      const messages = [];
+      if (whitespace.length) {
+        messages.push(`Manual sequence: remove ${whitespace.length} whitespace character(s).`);
       }
       if (terminalStops) {
-        warnings.push(
-          `Manual sequence: remove terminal stop codon from ${terminalStops} chain(s).`
+        messages.push(`Manual sequence: remove terminal stop codon from ${terminalStops} chain(s).`);
+      }
+      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
+      const length = sequence.replace(/:/g, "").length;
+      if (limit && length > limit.limit) {
+        messages.push(
+          `Manual sequence length ${length.toLocaleString()} residues exceeds the ${limit.title} approximate limit of ${limit.limit.toLocaleString()}.`
         );
       }
-      if (limit && sequenceLength > limit.limit) {
-        warnings.push(
-          `Manual sequence length ${sequenceLength.toLocaleString()} residues exceeds the ${limit.title} approximate limit of ${limit.limit.toLocaleString()}.`
-        );
-      }
-      return warnings;
+      return { messages, severity: messages.length ? "review" : "pass" };
     };
+
     const unsupportedEntityTypes = (file) =>
       (file.entityTypes || []).filter(
-        (entityType) =>
-          entityType !== "protein" &&
-          !NON_PROTEIN_METHODS.has(methodControl?.value)
+        (type) => type !== "protein" && !NON_PROTEIN_METHODS.has(methodControl?.value)
       );
-    const getFileSeverity = (file, limit) => {
-      if (file.error) return "error";
-      if (unsupportedEntityTypes(file).length) {
-        return file.collectionInput ? "review" : "error";
-      }
-      if (
-        file.kind === "yaml" &&
-        methodControl?.value !== "boltz"
-      ) {
-        return file.ignoredForMethod ? "review" : "error";
-      }
-      if (
-        file.symbolicLink ||
-        file.ignoredForMethod ||
-        (limit && file.sequenceLength > limit.limit)
-      ) {
-        return "review";
-      }
-      return "none";
-    };
-    const getCheckedFilesState = (checkedFiles) => {
-      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
-      const severities = checkedFiles.map((file) => getFileSeverity(file, limit));
-      const noRunnableInputs =
-        checkedFiles.some((file) => file.collectionInput) &&
-        !checkedFiles.some((file) =>
-          !file.error &&
-          !file.ignoredForMethod &&
-          !unsupportedEntityTypes(file).length
-        );
-      return {
-        needsAttention: noRunnableInputs || severities.includes("error"),
-        requiresReview: severities.includes("review")
-      };
-    };
-    const buildWarnings = (checkedFiles) => {
-      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
+
+    const analyseFiles = (files) => {
+      const messages = [];
       const seen = new Map();
-      return checkedFiles.flatMap((file) => {
+      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
+      const collection = files.some((file) => file.collectionInput);
+      let runnableInputs = 0;
+      let severity = "pass";
+      const add = (message, candidate = "adjustment") => {
+        messages.push(message);
+        severity = increaseSeverity(severity, candidate);
+      };
+
+      files.forEach((file) => {
         if (file.ignoredForMethod) {
-          return [`${file.label}: YAML input will be ignored unless Boltz is selected.`];
+          add(`${file.label}: YAML input will be ignored unless Boltz is selected.`, "review");
+          return;
         }
         if (file.symbolicLink) {
-          return [`${file.label}: symbolic link; its target will be followed when the run starts.`];
+          runnableInputs += 1;
+          add(
+            `${file.label}: symbolic link; its target will be followed when the run starts.`,
+            "review"
+          );
+          return;
         }
-        if (file.kind === "csv") return [];
-        if (file.error) return [file.error];
+        if (file.error) {
+          add(file.error, "error");
+          return;
+        }
         if (file.kind === "yaml") {
-          return methodControl?.value === "boltz"
-            ? []
-            : [`${file.label}: YAML input is only supported by Boltz.`];
+          if (methodControl?.value === "boltz") {
+            runnableInputs += 1;
+          } else {
+            add(`${file.label}: YAML input is only supported by Boltz.`, "error");
+          }
+          return;
         }
+
         const unsupportedTypes = unsupportedEntityTypes(file);
         if (unsupportedTypes.length) {
-          return [
+          add(
             file.collectionInput
               ? `${file.label}: ${unsupportedTypes.join(", ")} input will be ignored unless AlphaFold3 or Boltz is selected.`
-              : `${file.label}: ${unsupportedTypes.join(", ")} input is only supported by AlphaFold3 or Boltz.`
-          ];
+              : `${file.label}: ${unsupportedTypes.join(", ")} input is only supported by AlphaFold3 or Boltz.`,
+            file.collectionInput ? "review" : "error"
+          );
+          return;
         }
+        runnableInputs += 1;
         const original = seen.get(file.sequenceKey);
         if (original) {
-          return [`${file.label}: duplicate sequence of ${original}; this file will be skipped.`];
+          add(`${file.label}: duplicate sequence of ${original}; this file will be skipped.`);
+          return;
         }
         seen.set(file.sequenceKey, file.label);
-        const fileWarnings = file.changes.length
-          ? [`${file.label}: ${file.changes.join(", ")}.`]
-          : [];
+        if (file.changes.length) add(`${file.label}: ${file.changes.join(", ")}.`);
         if (limit && file.sequenceLength > limit.limit) {
-          fileWarnings.push(
-            `${file.label}: total sequence length ${file.sequenceLength.toLocaleString()} residues exceeds the ${limit.title} approximate limit of ${limit.limit.toLocaleString()}.`
+          add(
+            `${file.label}: total sequence length ${file.sequenceLength.toLocaleString()} residues exceeds the ${limit.title} approximate limit of ${limit.limit.toLocaleString()}.`,
+            "review"
           );
         }
-        return fileWarnings;
       });
+      if (collection && !runnableInputs) severity = "error";
+      return { messages, severity };
     };
-    const getDirectoryFiles = async (directoryPath, signal, cache) => {
-      if (cache.has(directoryPath)) return cache.get(directoryPath);
-      const request = fetch(buildFilesUrl(directoryPath), {
+
+    const isSymbolicLink = (mode) => {
+      const values = [Number(mode)];
+      if (typeof mode === "string" && /^[0-7]+$/.test(mode)) {
+        values.push(Number.parseInt(mode, 8));
+      }
+      return values.some((value) => (value & 0o170000) === 0o120000);
+    };
+    const buildFilesUrl = (path) => {
+      const segments = path
+        .replace(/^\/+/, "")
+        .split("/")
+        .filter(Boolean)
+        .map(encodeURIComponent)
+        .join("/");
+      return `/pun/sys/dashboard/files/fs/${segments}`;
+    };
+    const getDirectoryFiles = async (path, signal, cache) => {
+      if (cache.has(path)) return cache.get(path);
+      const request = fetch(buildFilesUrl(path), {
         credentials: "same-origin",
         headers: { Accept: "application/json" },
         signal
       }).then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`Could not list ${directoryPath} (${response.status}).`);
-        }
+        if (!response.ok) throw new Error(`Could not list ${path} (${response.status}).`);
         const listing = await response.json();
         return (listing.files || [])
           .filter((file) => file.type === "f" && file.url)
@@ -921,16 +903,15 @@
           }))
           .sort((left, right) => left.label.localeCompare(right.label));
       });
-      cache.set(directoryPath, request);
+      cache.set(path, request);
       return request;
     };
-
     const getDirectInputFile = async (path, signal, cache) => {
       const separator = path.lastIndexOf("/");
-      const directoryPath = separator === 0 ? "/" : path.slice(0, separator);
-      const fileName = path.slice(separator + 1);
-      const files = await getDirectoryFiles(directoryPath, signal, cache);
-      const file = files.find((candidate) => candidate.label === fileName);
+      const directory = separator === 0 ? "/" : path.slice(0, separator);
+      const name = path.slice(separator + 1);
+      const file = (await getDirectoryFiles(directory, signal, cache))
+        .find((candidate) => candidate.label === name);
       if (!file) throw new Error(`File not found: ${path}`);
       return file;
     };
@@ -939,7 +920,7 @@
       if (!response.ok) throw new Error(`Could not read ${file.label} (${response.status}).`);
       return response.text();
     };
-    const prepareCollectionFiles = (files) =>
+    const prepareCollection = (files) =>
       files
         .filter((file) => file.kind === "fasta" || file.kind === "yaml")
         .map((file) => ({
@@ -947,14 +928,12 @@
           collectionInput: true,
           ignoredForMethod: file.kind === "yaml" && methodControl?.value !== "boltz"
         }));
-
-    const mapWithConcurrency = async (items, limit, callback) => {
+    const mapWithConcurrency = async (items, callback, limit = 6) => {
       const results = Array(items.length);
       let nextIndex = 0;
       const worker = async () => {
         while (nextIndex < items.length) {
-          const index = nextIndex;
-          nextIndex += 1;
+          const index = nextIndex++;
           results[index] = await callback(items[index]);
         }
       };
@@ -962,171 +941,109 @@
       return results;
     };
 
+    const loadInputFiles = async (path, signal) => {
+      const cache = new Map();
+      const kind = getInputKind(path);
+      if (!kind) return prepareCollection(await getDirectoryFiles(path, signal, cache));
+
+      const selected = await getDirectInputFile(path, signal, cache);
+      if (kind !== "csv") return [selected];
+      const rows = parseSamplesheet(await fetchText(selected, signal));
+      return prepareCollection(await mapWithConcurrency(rows, async (row) => {
+        const referencedPath = resolveSamplesheetPath(path, row.path);
+        const file = await getDirectInputFile(referencedPath, signal, cache);
+        if (file.kind !== "fasta" && file.kind !== "yaml") {
+          throw new Error(
+            `Samplesheet row ${row.rowNumber} has unsupported input type: ${row.path}.`
+          );
+        }
+        return { ...file, label: `${file.label} (samplesheet row ${row.rowNumber})` };
+      }));
+    };
+
+    const checkFile = async (file, signal) => {
+      if (file.ignoredForMethod || file.symbolicLink) return file;
+      try {
+        const contents = await fetchText(file, signal);
+        if (file.kind === "yaml") {
+          validateBoltzYaml(contents, file.label);
+          return file;
+        }
+        return { ...file, ...parseFasta(contents, file.label) };
+      } catch (error) {
+        if (error.name === "AbortError") throw error;
+        return { ...file, error: error.message };
+      }
+    };
+
     let requestNumber = 0;
     let preflightTimer = null;
-    let lastCheckedPath = null;
-    let lastWarnings = null;
-    let lastNeedsAttention = false;
-    let lastRequiresReview = false;
-    let lastCheckedFiles = null;
     let activeController = null;
-    const preflight = async (forceRefresh = false) => {
-      const request = ++requestNumber;
-      const controller = new AbortController();
-      activeController = controller;
+    let lastCheckedFiles = null;
+
+    const preflight = async (request, controller) => {
       const rawInput = input.value;
       const path = rawInput.trim();
       if (!path.startsWith("/")) {
-        const sequence = normaliseManualSequence(rawInput);
-        lastCheckedPath = rawInput;
-        lastWarnings = getManualSequenceWarnings(rawInput);
-        lastNeedsAttention = Boolean(sequence) && !isManualSequence(sequence);
-        lastRequiresReview = lastWarnings.length > 0 && !lastNeedsAttention;
         lastCheckedFiles = null;
-        setWarnings(
-          lastWarnings,
-          Boolean(sequence),
-          lastNeedsAttention,
-          lastRequiresReview
-        );
-        return;
-      }
-      if (!forceRefresh && path === lastCheckedPath && lastWarnings !== null) {
-        if (lastCheckedFiles) {
-          lastWarnings = buildWarnings(lastCheckedFiles);
-          const state = getCheckedFilesState(lastCheckedFiles);
-          lastNeedsAttention = state.needsAttention;
-          lastRequiresReview = state.requiresReview;
-        }
-        setWarnings(lastWarnings, true, lastNeedsAttention, lastRequiresReview);
+        render(analyseManualInput(rawInput));
         return;
       }
 
       try {
-        const listingCache = new Map();
-        const directInput = isDirectInputPath(path);
-        const directoryFiles = directInput
-          ? []
-          : await getDirectoryFiles(path, controller.signal, listingCache);
-        const selectedFile = directInput
-          ? await getDirectInputFile(path, controller.signal, listingCache)
-          : null;
-        let files = selectedFile ? [selectedFile] : prepareCollectionFiles(directoryFiles);
-        if (selectedFile?.kind === "csv") {
-          const rows = parseSamplesheet(await fetchText(selectedFile, controller.signal));
-          files = prepareCollectionFiles(await mapWithConcurrency(rows, 6, async (row) => {
-            const referencedPath = resolveSamplesheetPath(path, row.path);
-            const file = await getDirectInputFile(
-              referencedPath,
-              controller.signal,
-              listingCache
-            );
-            if (file.kind !== "fasta" && file.kind !== "yaml") {
-              throw new Error(
-                `Samplesheet row ${row.rowNumber} has unsupported input type: ${row.path}.`
-              );
-            }
-            return { ...file, label: `${file.label} (samplesheet row ${row.rowNumber})` };
-          }));
-        }
+        const files = await loadInputFiles(path, controller.signal);
         if (request !== requestNumber) return;
         if (!files.length) {
-          const expectedInputs = methodControl?.value === "boltz"
+          const expected = methodControl?.value === "boltz"
             ? "FASTA or YAML input files"
             : "FASTA files (.fa or .fasta)";
-          const warnings = [`No compatible ${expectedInputs} were found in this input.`];
-          lastCheckedPath = path;
-          lastWarnings = warnings;
-          lastNeedsAttention = true;
-          lastRequiresReview = false;
           lastCheckedFiles = null;
-          setWarnings(warnings, false, true);
+          render(errorResult(`No compatible ${expected} were found in this input.`));
           return;
         }
-
-        const checkedFiles = await mapWithConcurrency(files, 6, async (file) => {
-          if (file.ignoredForMethod) return file;
-          if (file.kind === "yaml") {
-            try {
-              validateBoltzYaml(await fetchText(file, controller.signal), file.label);
-              return file;
-            } catch (error) {
-              if (error.name === "AbortError") throw error;
-              return { ...file, error: error.message };
-            }
-          }
-          if (file.kind !== "fasta") return file;
-          if (file.symbolicLink) return { ...file, symbolicLink: true };
-          try {
-            return {
-              ...file,
-              ...parseFasta(await fetchText(file, controller.signal), file.label)
-            };
-          } catch (error) {
-            if (error.name === "AbortError") throw error;
-            return { ...file, error: error.message };
-          }
-        });
+        const checkedFiles = await mapWithConcurrency(
+          files,
+          (file) => checkFile(file, controller.signal)
+        );
         if (request !== requestNumber) return;
-
-        const warnings = buildWarnings(checkedFiles);
-        lastCheckedPath = path;
-        lastWarnings = warnings;
-        const state = getCheckedFilesState(checkedFiles);
-        lastNeedsAttention = state.needsAttention;
-        lastRequiresReview = state.requiresReview;
         lastCheckedFiles = checkedFiles;
-        setWarnings(warnings, true, lastNeedsAttention, lastRequiresReview);
+        render(analyseFiles(checkedFiles));
       } catch (error) {
-        if (error.name === "AbortError") return;
-        if (request !== requestNumber) return;
-        const warnings = [`Could not check this input: ${error.message}`];
-        lastCheckedPath = path;
-        lastWarnings = warnings;
-        lastNeedsAttention = true;
-        lastRequiresReview = false;
+        if (error.name === "AbortError" || request !== requestNumber) return;
         lastCheckedFiles = null;
-        setWarnings(warnings, false, true);
+        render(errorResult(`Could not check this input: ${error.message}`));
       }
     };
 
-    const schedulePreflight = (forceRefresh = false) => {
-      requestNumber += 1;
-      if (activeController) activeController.abort();
+    const schedulePreflight = () => {
+      const request = ++requestNumber;
+      activeController?.abort();
       if (preflightTimer) window.clearTimeout(preflightTimer);
-      setChecking();
-      preflightTimer = window.setTimeout(() => preflight(forceRefresh), 250);
+      const controller = new AbortController();
+      activeController = controller;
+      renderChecking();
+      preflightTimer = window.setTimeout(
+        () => preflight(request, controller),
+        250
+      );
     };
 
-    if (input.dataset.oodInputPreflightBound !== "1") {
-      input.addEventListener("input", () => schedulePreflight(true));
-      input.dataset.oodInputPreflightBound = "1";
-    }
+    input.addEventListener("input", schedulePreflight);
     if (methodControl && methodControl.dataset.oodInputLengthBound !== "1") {
       methodControl.addEventListener("change", () => {
-        const currentPath = input.value.trim();
-        const mustReloadFiles =
-          currentPath.startsWith("/") &&
-          (!isDirectInputPath(currentPath) || isCsvPath(currentPath));
-        if (mustReloadFiles) {
-          schedulePreflight(true);
+        const path = input.value.trim();
+        const kind = getInputKind(path);
+        if (path.startsWith("/") && (!kind || kind === "csv")) {
+          schedulePreflight();
         } else if (lastCheckedFiles) {
-          lastWarnings = buildWarnings(lastCheckedFiles);
-          const state = getCheckedFilesState(lastCheckedFiles);
-          lastNeedsAttention = state.needsAttention;
-          lastRequiresReview = state.requiresReview;
-          setWarnings(lastWarnings, true, lastNeedsAttention, lastRequiresReview);
+          render(analyseFiles(lastCheckedFiles));
         } else {
           schedulePreflight();
         }
       });
       methodControl.dataset.oodInputLengthBound = "1";
     }
-
-    if (input.value.trim() && input.dataset.oodInputPreflightInitialised !== "1") {
-      input.dataset.oodInputPreflightInitialised = "1";
-      schedulePreflight();
-    }
+    if (input.value.trim()) schedulePreflight();
   };
 
   document.addEventListener("DOMContentLoaded", initInputPreflight);
