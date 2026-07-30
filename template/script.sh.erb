@@ -157,7 +157,7 @@ function sanitise_staged_directory() {
         local status=$?
     fi
     if [ "${status}" -eq 2 ]; then
-        echo "ERROR: No compatible inputs remain for ${af_method}."
+        echo "ERROR: Input validation failed for ${af_method}."
         exit 1
     fi
     return 0
@@ -258,7 +258,7 @@ then
     else
         sanitise_status=$?
         if [ "${sanitise_status}" -eq 2 ]; then
-            echo "ERROR: No compatible inputs remain for ${af_method}."
+            echo "ERROR: Input validation failed for ${af_method}."
             exit 1
         fi
         SAMPLESHEET="${user_input}"
@@ -270,9 +270,7 @@ then
     mkdir -p fasta
     cp "${user_input}" ./fasta/
     dos2unix ./fasta/*
-    if [[ "${user_input,,}" =~ \.fa(sta)?$ ]]; then
-        sanitise_staged_directory
-    fi
+    sanitise_staged_directory
     create_and_normalise_samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
 fi
 
