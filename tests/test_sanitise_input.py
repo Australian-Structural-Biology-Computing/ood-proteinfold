@@ -57,15 +57,93 @@ class SanitiseFastaTests(unittest.TestCase):
 
             self.assertEqual(first_hash, second_hash)
 
-    def test_rejects_sequence_before_header(self):
+    def test_adds_header_to_headerless_sequence(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            source = directory / "headerless.fasta"
+            destination = directory / "output.fasta"
+            source.write_text("ACDE\n")
+
+            _, changes = SANITISE_INPUT.sanitise_fasta(source, destination)
+
+            self.assertEqual(destination.read_text(), ">ACDE\nACDE\n")
+            self.assertIn("added FASTA header ACDE", changes)
+
+    def test_rejects_unsupported_entity_sequence(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)
             source = directory / "invalid.fasta"
             destination = directory / "output.fasta"
-            source.write_text("ACDE\n")
+            source.write_text(">unknown\nACDE?\n")
 
-            with self.assertRaisesRegex(ValueError, "before the first FASTA header"):
+            with self.assertRaisesRegex(ValueError, "unsupported entity sequence"):
                 SANITISE_INPUT.sanitise_fasta(source, destination)
+
+    def test_strips_terminal_stop_before_hashing(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            plain = directory / "plain.fasta"
+            stopped = directory / "stopped.fasta"
+            plain_output = directory / "plain-output.fasta"
+            stopped_output = directory / "stopped-output.fasta"
+            plain.write_text(">protein\nACDE\n")
+            stopped.write_text(">protein\nACDE*\n")
+
+            plain_hash, _ = SANITISE_INPUT.sanitise_fasta(plain, plain_output)
+            stopped_hash, changes = SANITISE_INPUT.sanitise_fasta(stopped, stopped_output)
+
+            self.assertEqual(plain_hash, stopped_hash)
+            self.assertEqual(stopped_output.read_text(), ">protein\nACDE\n")
+            self.assertIn("removed terminal stop codon from 1 FASTA record(s)", changes)
+
+    def test_rejects_internal_stop_character(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            source = directory / "internal-stop.fasta"
+            destination = directory / "output.fasta"
+            source.write_text(">protein|protein\nAC*DE\n")
+
+            with self.assertRaisesRegex(ValueError, r"invalid amino acid character\(s\): \*"):
+                SANITISE_INPUT.sanitise_fasta(source, destination)
+
+    def test_accepts_valid_non_protein_entities_for_supported_methods(self):
+        inputs = {
+            "dna": (">dna\nACTGN\n", "ACTGN"),
+            "rna": (">rna\nACUGN\n", "ACUGN"),
+            "smiles": (">ligand\nC1=CC=CC=C1\n", "C1=CC=CC=C1"),
+            "ccd": (">ligand|ccd\nATP\n", "ATP"),
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            for method in ("alphafold3", "boltz"):
+                for entity_type, (contents, sequence) in inputs.items():
+                    with self.subTest(method=method, entity_type=entity_type):
+                        source = directory / f"{method}-{entity_type}.fasta"
+                        destination = directory / f"{method}-{entity_type}-output.fasta"
+                        source.write_text(contents)
+
+                        SANITISE_INPUT.sanitise_fasta(source, destination, method)
+
+                        self.assertEqual(
+                            SANITISE_INPUT.infer_entity_type(
+                                "ligand|ccd" if entity_type == "ccd" else None,
+                                sequence,
+                            ),
+                            entity_type,
+                        )
+                        self.assertEqual(destination.read_text(), contents)
+
+    def test_rejects_non_protein_entities_for_protein_only_methods(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            source = directory / "dna.fasta"
+            destination = directory / "output.fasta"
+            source.write_text(">dna\nACTGN\n")
+
+            with self.assertRaises(SANITISE_INPUT.IncompatibleEntityError):
+                SANITISE_INPUT.sanitise_fasta(
+                    source, destination, "alphafold2"
+                )
 
 
 class SanitiseDirectoryTests(unittest.TestCase):
@@ -82,6 +160,28 @@ class SanitiseDirectoryTests(unittest.TestCase):
             self.assertTrue((directory / "a.fasta").exists())
             self.assertFalse((directory / "b.fasta").exists())
             self.assertIn(str(directory / "b.fasta"), warning_path.read_text())
+
+
+class NormaliseSamplesheetIdsTests(unittest.TestCase):
+    def test_renames_duplicate_generated_ids(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            samplesheet = directory / "samplesheet.csv"
+            warning_path = directory / "WARNING.txt"
+            samplesheet.write_text(
+                "id,fasta\n"
+                "protein,one.fasta\n"
+                "protein,two.fasta\n"
+                "protein,three.fasta\n"
+            )
+
+            SANITISE_INPUT.normalise_samplesheet_ids(samplesheet, warning_path)
+
+            self.assertEqual(
+                samplesheet.read_text(),
+                "id,fasta\nprotein,one.fasta\nprotein-2,two.fasta\nprotein-3,three.fasta\n",
+            )
+            self.assertIn("protein -> protein-2", warning_path.read_text())
 
 
 if __name__ == "__main__":
