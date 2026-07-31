@@ -762,6 +762,9 @@
         sequenceKey: JSON.stringify(records.map((record) => record.sequence)),
         sequenceLength: records.reduce((total, record) => total + record.sequence.length, 0),
         entityTypes: [...new Set(records.map((record) => record.entityType))],
+        hasUnknownProteinResidue: records.some(
+          (record) => record.entityType === "protein" && record.sequence.includes("X")
+        ),
         changes: warnings
       };
     };
@@ -774,6 +777,9 @@
       if (!sequence) return { checked: false };
       if (!sequence.split(":").every((chain) => AMINO_ACID_SEQUENCE_PATTERN.test(chain))) {
         return errorResult("Enter a valid amino-acid sequence or an absolute input path.");
+      }
+      if (methodControl?.value === "alphafold2" && sequence.includes("X")) {
+        return errorResult("AlphaFold2 cannot run sequences containing X.");
       }
 
       const messages = [];
@@ -833,6 +839,15 @@
           } else {
             add(`${file.label}: YAML input is only supported by Boltz.`, "error");
           }
+          return;
+        }
+        if (methodControl?.value === "alphafold2" && file.hasUnknownProteinResidue) {
+          add(
+            file.collectionInput
+              ? `${file.label}: contains X; this file will be ignored while AlphaFold2 is selected.`
+              : `${file.label}: AlphaFold2 cannot run sequences containing X.`,
+            file.collectionInput ? "review" : "error"
+          );
           return;
         }
 

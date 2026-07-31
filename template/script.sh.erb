@@ -189,6 +189,10 @@ if [ "${MODE}" == "MANUAL_INPUT" ]; then
     if [ "${whitespace_free_sequence}" != "${sequence_input}" ]; then
         echo "WARNING: Removed terminal stop codon from manual sequence input" | tee -a "$(pwd)/WARNING.txt" >&2
     fi
+    if [ "${af_method}" == "alphafold2" ] && [[ "${sequence_input}" == *X* ]]; then
+        echo "ERROR: AlphaFold2 cannot run sequences containing X."
+        exit 1
+    fi
     user_input="${sequence_input}"
 fi
 
