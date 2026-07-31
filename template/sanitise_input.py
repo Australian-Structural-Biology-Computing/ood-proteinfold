@@ -224,6 +224,10 @@ def sanitise_fasta(source_path, destination_path, af_method=None):
             if entity_type == "unknown":
                 raise ValueError("FASTA record contains an unsupported entity sequence")
             validate_entity_sequence(entity_type, sequence)
+            if af_method == "alphafold2" and entity_type == "protein" and "X" in sequence:
+                raise IncompatibleEntityError(
+                    "FASTA record contains X, which AlphaFold2 cannot run"
+                )
             if af_method and not entity_type_is_supported(entity_type, af_method):
                 raise IncompatibleEntityError(
                     f"FASTA record is {entity_type} input, which is only supported by "
