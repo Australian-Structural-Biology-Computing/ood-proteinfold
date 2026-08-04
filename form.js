@@ -487,37 +487,56 @@
       severityOrder[candidate] > severityOrder[current] ? candidate : current;
     const errorResult = (message) => ({ messages: [message], severity: "error" });
 
-    const render = ({ messages = [], severity = "pass", checked = true }) => {
+    const render = ({
+      messages = [],
+      severity = "pass",
+      checked = true,
+      runnableInputs = null,
+      totalInputs = null
+    }) => {
       const message = messages.join("\n");
       const hasWarnings = messages.length > 0;
+      const hasRunnableStatus = totalInputs !== null;
       const needsAttention = severity === "error";
       marker.hidden = !checked && !hasWarnings;
       marker.textContent = hasWarnings ? "!" : "\u2713";
       marker.style.fontSize = "1rem";
-      marker.title = message || "Input checked; no sanitisation is required.";
+      marker.title = hasRunnableStatus
+        ? `${runnableInputs}/${totalInputs} inputs runnable.${message ? ` ${message}` : ""}`
+        : (message || "Input checked; no sanitisation is required.");
       marker.setAttribute("aria-label", marker.title);
       marker.style.background = needsAttention
         ? "#dc3545"
         : (hasWarnings ? "#ffc107" : "#198754");
       marker.style.color = hasWarnings && !needsAttention ? "#212529" : "#ffffff";
-      summary.hidden = !hasWarnings;
-      summary.className = needsAttention ? "alert alert-danger" : "alert alert-warning";
+      summary.hidden = !hasWarnings && !hasRunnableStatus;
+      summary.className = needsAttention
+        ? "alert alert-danger"
+        : (hasWarnings ? "alert alert-warning" : "alert alert-success");
       summary.replaceChildren();
-      if (hasWarnings) {
+      if (hasWarnings || hasRunnableStatus) {
         const heading = document.createElement("strong");
-        heading.textContent = needsAttention
+        const status = needsAttention
           ? "Input needs attention before the run"
           : (severity === "review"
               ? "Review input before the run"
               : "Input will be adjusted before the run");
-        const list = document.createElement("ul");
-        list.style.margin = "0.5rem 0 0";
-        messages.forEach((warning) => {
-          const item = document.createElement("li");
-          item.textContent = warning;
-          list.appendChild(item);
-        });
-        summary.append(heading, list);
+        heading.textContent = !hasRunnableStatus
+          ? status
+          : (hasWarnings
+              ? `${runnableInputs}/${totalInputs} inputs runnable — ${status}`
+              : `${runnableInputs}/${totalInputs} inputs runnable`);
+        summary.append(heading);
+        if (hasWarnings) {
+          const list = document.createElement("ul");
+          list.style.margin = "0.5rem 0 0";
+          messages.forEach((warning) => {
+            const item = document.createElement("li");
+            item.textContent = warning;
+            list.appendChild(item);
+          });
+          summary.append(list);
+        }
       }
       fieldContainer?.classList.toggle("has-warning", hasWarnings && !needsAttention);
       fieldContainer?.classList.toggle("has-error", needsAttention);
@@ -741,22 +760,28 @@
       finishRecord();
       const warnings = [];
       const internalBlankLines = changes.blankLines - changes.trailingBlankLines;
-      if (internalBlankLines) warnings.push(`remove ${internalBlankLines} blank line(s)`);
-      if (changes.lineEndings) {
-        warnings.push(`standardise line endings in ${changes.lineEndings} line(s)`);
+      if (internalBlankLines) {
+        warnings.push(`${internalBlankLines} blank line(s) will be removed`);
       }
-      if (changes.headers) warnings.push(`tidy ${changes.headers} FASTA header(s)`);
-      if (changes.addedHeader) warnings.push(`add FASTA header ${changes.addedHeader}`);
+      if (changes.lineEndings) {
+        warnings.push(`line endings will be standardised in ${changes.lineEndings} line(s)`);
+      }
+      if (changes.headers) {
+        warnings.push(`${changes.headers} FASTA header(s) will be tidied`);
+      }
+      if (changes.addedHeader) {
+        warnings.push(`FASTA header ${changes.addedHeader} will be added`);
+      }
       if (changes.terminalStops) {
         warnings.push(
-          `remove terminal stop codon from ${changes.terminalStops} FASTA record(s)`
+          `terminal stop codon will be removed from ${changes.terminalStops} FASTA record(s)`
         );
       }
       if (changes.sequenceLines) {
         const count = changes.whitespace
           ? ` (${changes.whitespace} whitespace character(s))`
           : "";
-        warnings.push(`remove whitespace from ${changes.sequenceLines} sequence line(s)${count}`);
+        warnings.push(`whitespace will be removed from ${changes.sequenceLines} sequence line(s)${count}`);
       }
       return {
         sequenceKey: JSON.stringify(records.map((record) => record.sequence)),
@@ -784,10 +809,10 @@
 
       const messages = [];
       if (whitespace.length) {
-        messages.push(`Manual sequence: remove ${whitespace.length} whitespace character(s).`);
+        messages.push(`Manual sequence: ${whitespace.length} whitespace character(s) will be removed.`);
       }
       if (terminalStops) {
-        messages.push(`Manual sequence: remove terminal stop codon from ${terminalStops} chain(s).`);
+        messages.push(`Manual sequence: terminal stop codon will be removed from ${terminalStops} chain(s).`);
       }
       const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
       const length = sequence.replace(/:/g, "").length;
@@ -861,12 +886,12 @@
           );
           return;
         }
-        runnableInputs += 1;
         const original = seen.get(file.sequenceKey);
         if (original) {
           add(`${file.label}: duplicate sequence of ${original}; this file will be skipped.`);
           return;
         }
+        runnableInputs += 1;
         seen.set(file.sequenceKey, file.label);
         if (file.changes.length) add(`${file.label}: ${file.changes.join(", ")}.`);
         if (limit && file.sequenceLength > limit.limit) {
@@ -877,7 +902,12 @@
         }
       });
       if (collection && !runnableInputs) severity = "error";
-      return { messages, severity };
+      return {
+        messages,
+        severity,
+        runnableInputs,
+        totalInputs: collection ? files.length : null
+      };
     };
 
     const isSymbolicLink = (mode) => {
