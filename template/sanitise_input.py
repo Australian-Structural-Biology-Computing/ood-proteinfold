@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate and normalise FASTA inputs staged for proteinfold."""
+"""Validate and normalise inputs staged for proteinfold."""
 
 import csv
 import hashlib
@@ -16,9 +16,12 @@ HEADERLESS_SEQUENCE_ID_LENGTH = 6
 PROTEIN_ALPHABET = frozenset("ACDEFGHIKLMNPQRSTVWYX")
 DNA_ALPHABET = frozenset("ACTGN")
 RNA_ALPHABET = frozenset("ACUGN")
-SMILES_PATTERN = re.compile(r"[A-Za-z0-9@+\-\[\]\(\)=#\$%]+$")
+SMILES_PATTERN = re.compile(r"[A-Za-z0-9@+\-\[\]\(\)=#\$%:./\\*]+")
+SMILES_DANGLING_TOKENS = frozenset("-/\\=#$%:.")
 ENTITY_TYPES = frozenset(("protein", "ccd", "smiles", "dna", "rna"))
 NON_PROTEIN_METHODS = frozenset(("alphafold3", "boltz"))
+POLYMER_ENTITY_TYPES = frozenset(("protein", "dna", "rna"))
+BOLTZ_ENTITY_TYPES = POLYMER_ENTITY_TYPES | {"ligand"}
 
 
 class IncompatibleEntityError(ValueError):
@@ -68,8 +71,12 @@ def entity_type_is_supported(entity_type, af_method):
     return entity_type == "protein" or af_method in NON_PROTEIN_METHODS
 
 
-def validate_entity_sequence(entity_type, sequence):
+def validate_entity_sequence(entity_type, sequence, allow_protein_chains=True):
     if entity_type == "protein":
+        if not allow_protein_chains and ":" in sequence:
+            raise ValueError(
+                "Protein sequence contains a chain separator; use an id list for identical chains"
+            )
         chains = sequence.split(":")
         if any(not chain for chain in chains):
             raise ValueError("Protein sequence contains an empty chain")
@@ -85,11 +92,14 @@ def validate_entity_sequence(entity_type, sequence):
         raise ValueError("DNA sequence contains invalid nucleotide characters")
     elif entity_type == "rna" and not set(sequence) <= RNA_ALPHABET:
         raise ValueError("RNA sequence contains invalid nucleotide characters")
-    elif entity_type == "smiles" and not SMILES_PATTERN.fullmatch(sequence):
-        raise ValueError("SMILES sequence contains unsupported characters")
+    elif entity_type == "smiles":
+        if not SMILES_PATTERN.fullmatch(sequence):
+            raise ValueError("SMILES sequence contains unsupported characters")
+        if sequence[0] in SMILES_DANGLING_TOKENS or sequence[-1] in SMILES_DANGLING_TOKENS:
+            raise ValueError("SMILES sequence has dangling bond or component syntax")
 
 
-def validate_boltz_yaml(path):
+def load_boltz_yaml(path):
     try:
         import yaml
     except ImportError as error:
@@ -101,6 +111,12 @@ def validate_boltz_yaml(path):
     except (OSError, yaml.YAMLError) as error:
         raise InputValidationError(f"Invalid Boltz YAML: {error}") from error
 
+    return data, yaml
+
+
+def normalise_boltz_yaml(data):
+    """Validate Boltz entities and normalise their sequence values in place."""
+
     if not isinstance(data, dict):
         raise InputValidationError("Boltz YAML must contain a top-level mapping")
     sequences = data.get("sequences")
@@ -108,13 +124,15 @@ def validate_boltz_yaml(path):
         raise InputValidationError("Boltz YAML must contain a non-empty sequences list")
 
     chain_ids = set()
+    removed_whitespace = 0
+    removed_terminal_stops = 0
     for index, entry in enumerate(sequences, start=1):
         if not isinstance(entry, dict) or len(entry) != 1:
             raise InputValidationError(
                 f"Boltz YAML sequence entry {index} must be a single-key mapping"
             )
         entity_type, details = next(iter(entry.items()))
-        if entity_type not in {"protein", "dna", "rna", "ligand"}:
+        if entity_type not in BOLTZ_ENTITY_TYPES:
             raise InputValidationError(
                 f"Boltz YAML sequence entry {index} has unsupported entity type: {entity_type}"
             )
@@ -125,24 +143,126 @@ def validate_boltz_yaml(path):
 
         identifiers = details.get("id")
         identifiers = identifiers if isinstance(identifiers, list) else [identifiers]
-        if not identifiers or any(not isinstance(value, str) or not value.strip() for value in identifiers):
+        if not identifiers or any(
+            not isinstance(value, str) or not value.strip() for value in identifiers
+        ):
             raise InputValidationError(f"Boltz YAML {entity_type} entry {index} is missing id")
         if len(set(identifiers)) != len(identifiers) or chain_ids.intersection(identifiers):
             raise InputValidationError("Boltz YAML chain ids must be unique")
         chain_ids.update(identifiers)
 
-        if entity_type in {"protein", "dna", "rna"}:
+        if entity_type in POLYMER_ENTITY_TYPES:
             sequence = details.get("sequence")
             if not isinstance(sequence, str) or not sequence.strip():
                 raise InputValidationError(
                     f"Boltz YAML {entity_type} entry {index} is missing sequence"
                 )
+            normalised_sequence = strip_whitespace(sequence)
+            if not normalised_sequence:
+                raise InputValidationError(
+                    f"Boltz YAML {entity_type} entry {index} is missing sequence"
+                )
+            removed_whitespace += len(sequence) - len(normalised_sequence)
+            if entity_type == "protein":
+                if normalised_sequence.endswith("*"):
+                    normalised_sequence = normalised_sequence[:-1]
+                    removed_terminal_stops += 1
+            try:
+                validate_entity_sequence(
+                    entity_type, normalised_sequence, allow_protein_chains=False
+                )
+            except ValueError as error:
+                raise InputValidationError(
+                    f"Boltz YAML {entity_type} entry {index}: {error}"
+                ) from error
+            details["sequence"] = normalised_sequence
         else:
-            ligands = [key for key in ("smiles", "ccd") if details.get(key)]
-            if len(ligands) != 1:
+            ligand_keys = [key for key in ("smiles", "ccd") if key in details]
+            if len(ligand_keys) != 1:
                 raise InputValidationError(
                     f"Boltz YAML ligand entry {index} must contain exactly one of smiles or ccd"
                 )
+            ligand_key = ligand_keys[0]
+            ligand_value = details[ligand_key]
+            if ligand_key == "smiles":
+                if not isinstance(ligand_value, str):
+                    raise InputValidationError(
+                        f"Boltz YAML ligand entry {index} smiles must be a string"
+                    )
+                normalised_smiles = strip_whitespace(ligand_value)
+                if not normalised_smiles:
+                    raise InputValidationError(
+                        f"Boltz YAML ligand entry {index} is missing smiles"
+                    )
+                removed_whitespace += len(ligand_value) - len(normalised_smiles)
+                try:
+                    validate_entity_sequence("smiles", normalised_smiles)
+                except ValueError as error:
+                    raise InputValidationError(
+                        f"Boltz YAML ligand entry {index}: {error}"
+                    ) from error
+                details["smiles"] = normalised_smiles
+            else:
+                ccd_codes = ligand_value if isinstance(ligand_value, list) else [ligand_value]
+                if not ccd_codes or any(
+                    not isinstance(code, str) or not code.strip() for code in ccd_codes
+                ):
+                    raise InputValidationError(
+                        f"Boltz YAML ligand entry {index} ccd must be a string or "
+                        "non-empty list of strings"
+                    )
+                normalised_codes = [code.strip() for code in ccd_codes]
+                removed_whitespace += sum(
+                    len(code) - len(normalised)
+                    for code, normalised in zip(ccd_codes, normalised_codes)
+                )
+                details["ccd"] = (
+                    normalised_codes if isinstance(ligand_value, list) else normalised_codes[0]
+                )
+
+    changes = []
+    if removed_terminal_stops:
+        changes.append(
+            f"removed terminal stop codon from {removed_terminal_stops} Boltz YAML sequence(s)"
+        )
+    if removed_whitespace:
+        changes.append(
+            f"removed {removed_whitespace} whitespace character(s) from Boltz YAML input data"
+        )
+    return changes
+
+
+def validate_boltz_yaml(path):
+    data, _ = load_boltz_yaml(path)
+    normalise_boltz_yaml(data)
+
+
+def sanitise_boltz_yaml(source_path, destination_path):
+    data, yaml = load_boltz_yaml(source_path)
+    changes = normalise_boltz_yaml(data)
+    if changes:
+        with open(destination_path, "w", encoding="utf-8") as destination:
+            yaml.safe_dump(data, destination, allow_unicode=True, sort_keys=False)
+    else:
+        shutil.copy2(source_path, destination_path)
+    return changes
+
+
+def sanitise_boltz_yaml_in_place(path):
+    data, yaml = load_boltz_yaml(path)
+    changes = normalise_boltz_yaml(data)
+    if not changes:
+        return changes
+    with tempfile.NamedTemporaryFile(dir=os.path.dirname(path), delete=False) as temporary:
+        temporary_path = temporary.name
+    try:
+        with open(temporary_path, "w", encoding="utf-8") as destination:
+            yaml.safe_dump(data, destination, allow_unicode=True, sort_keys=False)
+        os.replace(temporary_path, path)
+        return changes
+    except BaseException:
+        os.unlink(temporary_path)
+        raise
 
 
 def sanitise_fasta(source_path, destination_path, af_method=None):
@@ -470,8 +590,12 @@ def sanitise_samplesheet(samplesheet_path, output_path, input_dir, warning_path,
                         f"({'; '.join(changes)})"
                     )
             else:
-                validate_boltz_yaml(input_path)
-                shutil.copy2(input_path, staged_path)
+                changes = sanitise_boltz_yaml(input_path, staged_path)
+                if changes:
+                    warnings.append(
+                        f"Sanitised Boltz YAML referenced by samplesheet row {index}: "
+                        f"{source_path} ({'; '.join(changes)})"
+                    )
 
             sample_id = (row.get(id_column) or "").strip()
             unique_id = unique_sample_id(sample_id, used_ids)
@@ -507,10 +631,14 @@ def sanitise_directory(directory, warning_path, af_method=None):
         for entry in os.scandir(directory)
         if entry.is_file() and entry.name.lower().endswith(FASTA_SUFFIXES)
     )
+    warnings = []
     if af_method == "boltz":
         for yaml_file in yaml_files:
-            validate_boltz_yaml(yaml_file)
-    warnings = []
+            changes = sanitise_boltz_yaml_in_place(yaml_file)
+            if changes:
+                warnings.append(
+                    f"Sanitised Boltz YAML file: {yaml_file} ({'; '.join(changes)})"
+                )
     seen_normalised_hashes = {}
     for fasta_file in fasta_files:
         try:

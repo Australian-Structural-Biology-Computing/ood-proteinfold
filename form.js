@@ -445,11 +445,13 @@
       [/\.csv$/i, "csv"]
     ];
     const boltzEntityTypes = new Set(["protein", "dna", "rna", "ligand"]);
+    const boltzPolymerTypes = new Set(["protein", "dna", "rna"]);
     const entityPatterns = {
       dna: /^[ACTGN]+$/,
       rna: /^[ACUGN]+$/,
-      smiles: /^[A-Za-z0-9@+\-\[\]()=#$%]+$/
+      smiles: /^[A-Za-z0-9@+\-\[\]()=#$%:./\\*]+$/
     };
+    const smilesDanglingTokens = new Set(["-", "/", "\\", "=", "#", "$", "%", ":", "."]);
     const severityOrder = { pass: 0, adjustment: 1, review: 2, error: 3 };
     let marker = document.getElementById("ood-proteinfold-input-warning");
     let summary = document.getElementById("ood-proteinfold-input-warning-summary");
@@ -607,6 +609,39 @@
       return `/${parts.filter(Boolean).join("/")}`;
     };
 
+    const unquoteYamlScalar = (value) => {
+      const trimmed = value.trim();
+      if (
+        trimmed.length >= 2 &&
+        ((trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+          (trimmed.startsWith('"') && trimmed.endsWith('"')))
+      ) {
+        return trimmed.slice(1, -1);
+      }
+      return trimmed;
+    };
+
+    const parseYamlStringOrList = (value, label) => {
+      const trimmed = value.trim();
+      const tokens = trimmed.startsWith("[") && trimmed.endsWith("]")
+        ? trimmed.slice(1, -1).split(",").map((token) => token.trim())
+        : [trimmed];
+      if (!tokens.length || tokens.some((token) => !token)) {
+        throw new Error(`${label} must contain one or more strings.`);
+      }
+      return tokens.map((token) => {
+        const unquoted = unquoteYamlScalar(token);
+        const quoted = unquoted !== token;
+        if (
+          !quoted &&
+          /^(?:null|true|false|~|[-+]?(?:\d+(?:\.\d*)?|\.\d+))$/i.test(token)
+        ) {
+          throw new Error(`${label} must contain strings.`);
+        }
+        return unquoted;
+      });
+    };
+
     const validateBoltzYaml = (contents, label) => {
       const entries = [];
       let sequencesIndent = null;
@@ -638,6 +673,9 @@
       if (!entries.length) {
         throw new Error(`${label} must contain a non-empty sequences list.`);
       }
+      const chainIds = new Set();
+      let removedWhitespace = 0;
+      let removedTerminalStops = 0;
       entries.forEach(({ type, fields }, index) => {
         const entry = `${label} ${type} entry ${index + 1}`;
         if (!boltzEntityTypes.has(type)) {
@@ -646,13 +684,62 @@
         if (!fields.id || fields.id === "[]") {
           throw new Error(`${entry} is missing id.`);
         }
-        if (["protein", "dna", "rna"].includes(type) && !fields.sequence) {
+        parseYamlStringOrList(fields.id, `${entry} id`).forEach((id) => {
+          if (!id || chainIds.has(id)) {
+            throw new Error(`${label} chain ids must be unique and non-empty.`);
+          }
+          chainIds.add(id);
+        });
+        if (boltzPolymerTypes.has(type) && !fields.sequence) {
           throw new Error(`${entry} is missing sequence.`);
         }
         if (type === "ligand" && Boolean(fields.smiles) === Boolean(fields.ccd)) {
           throw new Error(`${entry} must contain exactly one of smiles or ccd.`);
         }
+
+        if (boltzPolymerTypes.has(type)) {
+          const rawSequence = unquoteYamlScalar(fields.sequence);
+          const compactSequence = removeWhitespace(rawSequence);
+          if (!compactSequence) throw new Error(`${entry} is missing sequence.`);
+          removedWhitespace += rawSequence.length - compactSequence.length;
+          const sequence = type === "protein"
+            ? stripTerminalStops(compactSequence)
+            : compactSequence;
+          if (type === "protein") {
+            removedTerminalStops += compactSequence
+              .split(":")
+              .filter((chain) => chain.endsWith("*")).length;
+          }
+          validateEntitySequence(type, sequence, entry, false);
+        }
+
+        if (type === "ligand" && fields.smiles) {
+          const rawSmiles = unquoteYamlScalar(fields.smiles);
+          const compactSmiles = removeWhitespace(rawSmiles);
+          if (!compactSmiles) throw new Error(`${entry} is missing smiles.`);
+          removedWhitespace += rawSmiles.length - compactSmiles.length;
+          validateEntitySequence("smiles", compactSmiles, entry);
+        }
+        if (type === "ligand" && fields.ccd) {
+          parseYamlStringOrList(fields.ccd, `${entry} ccd`).forEach((code) => {
+            const normalisedCode = code.trim();
+            if (!normalisedCode) throw new Error(`${entry} ccd must not be empty.`);
+            removedWhitespace += code.length - normalisedCode.length;
+          });
+        }
       });
+      const changes = [];
+      if (removedTerminalStops) {
+        changes.push(
+          `terminal stop codon will be removed from ${removedTerminalStops} Boltz YAML sequence(s)`
+        );
+      }
+      if (removedWhitespace) {
+        changes.push(
+          `${removedWhitespace} whitespace character(s) will be removed from Boltz YAML input data`
+        );
+      }
+      return changes;
     };
 
     const inferEntityType = (header, sequence) => {
@@ -673,8 +760,13 @@
       return entityPatterns.smiles.test(sequence) ? "smiles" : "unknown";
     };
 
-    const validateEntitySequence = (entityType, sequence, label) => {
+    const validateEntitySequence = (entityType, sequence, label, allowProteinChains = true) => {
       if (entityType === "protein") {
+        if (!allowProteinChains && sequence.includes(":")) {
+          throw new Error(
+            `${label} contains a chain separator; use an id list for identical chains.`
+          );
+        }
         const invalidResidues = [...new Set(sequence.replace(/:/g, ""))]
           .filter((residue) => !AMINO_ACID_SEQUENCE_PATTERN.test(residue))
           .sort()
@@ -683,6 +775,13 @@
           throw new Error(
             `${label} contains invalid amino acid character(s): ${invalidResidues || ":"}.`
           );
+        }
+      } else if (entityType === "smiles") {
+        if (!entityPatterns.smiles.test(sequence)) {
+          throw new Error(`${label} contains invalid smiles characters.`);
+        }
+        if (smilesDanglingTokens.has(sequence[0]) || smilesDanglingTokens.has(sequence.at(-1))) {
+          throw new Error(`${label} has dangling SMILES bond or component syntax.`);
         }
       } else if (entityPatterns[entityType] && !entityPatterns[entityType].test(sequence)) {
         throw new Error(`${label} contains invalid ${entityType} characters.`);
@@ -861,6 +960,7 @@
         if (file.kind === "yaml") {
           if (methodControl?.value === "boltz") {
             runnableInputs += 1;
+            if (file.changes?.length) add(`${file.label}: ${file.changes.join(", ")}.`);
           } else {
             add(`${file.label}: YAML input is only supported by Boltz.`, "error");
           }
@@ -1011,8 +1111,7 @@
       try {
         const contents = await fetchText(file, signal);
         if (file.kind === "yaml") {
-          validateBoltzYaml(contents, file.label);
-          return file;
+          return { ...file, changes: validateBoltzYaml(contents, file.label) };
         }
         return { ...file, ...parseFasta(contents, file.label) };
       } catch (error) {
