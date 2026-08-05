@@ -6,12 +6,13 @@ from pathlib import Path
 import tempfile
 import unittest
 
+import yaml
+
 
 MODULE_PATH = Path(__file__).parents[1] / "template" / "sanitise_input.py"
 SPEC = importlib.util.spec_from_file_location("sanitise_input", MODULE_PATH)
 SANITISE_INPUT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SANITISE_INPUT)
-
 
 class SanitiseFastaTests(unittest.TestCase):
     def test_normalises_headers_sequence_whitespace_and_line_endings(self):
@@ -79,6 +80,16 @@ class SanitiseFastaTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "unsupported entity sequence"):
                 SANITISE_INPUT.sanitise_fasta(source, destination)
+
+    def test_rejects_smiles_with_dangling_bond_syntax(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            source = directory / "invalid-smiles.fasta"
+            destination = directory / "output.fasta"
+            source.write_text(">bad_smiles|smiles\nCCO/\n")
+
+            with self.assertRaisesRegex(ValueError, "dangling bond or component syntax"):
+                SANITISE_INPUT.sanitise_fasta(source, destination, "boltz")
 
     def test_strips_terminal_stop_before_hashing(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -162,8 +173,118 @@ class SanitiseDirectoryTests(unittest.TestCase):
             self.assertFalse((directory / "b.fasta").exists())
             self.assertIn(str(directory / "b.fasta"), warning_path.read_text())
 
+    def test_unchanged_boltz_yaml_does_not_create_warning(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            input_path = directory / "input.yaml"
+            warning_path = directory / "WARNING.txt"
+            contents = (
+                "sequences:\n"
+                "  - protein:\n      id: [A, B]\n      sequence: MKTAYIAKQR\n"
+                "  - dna:\n      id: C\n      sequence: ACTGN\n"
+                "  - rna:\n      id: D\n      sequence: ACUGN\n"
+                "  - ligand:\n      id: E\n      smiles: 'C/C=C\\C.CC'\n"
+                "  - ligand:\n      id: F\n      ccd: ATP\n"
+                "  - ligand:\n      id: G\n      ccd: [NAD, ZN]\n"
+            )
+            input_path.write_text(contents)
+
+            SANITISE_INPUT.sanitise_directory(directory, warning_path, "boltz")
+
+            self.assertFalse(warning_path.exists())
+            self.assertEqual(input_path.read_text(), contents)
+
 
 class BoltzYamlTests(unittest.TestCase):
+    def test_accepts_all_supported_entities_and_ligand_representations(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source = Path(temporary_directory) / "input.yaml"
+            destination = Path(temporary_directory) / "output.yaml"
+            source.write_text(
+                "sequences:\n"
+                "  - protein:\n      id: [A, B]\n      sequence: MKTAYIAKQR\n"
+                "  - dna:\n      id: C\n      sequence: ACTGN\n"
+                "  - rna:\n      id: D\n      sequence: ACUGN\n"
+                "  - ligand:\n      id: E\n      smiles: 'C/C=C\\C.CC'\n"
+                "  - ligand:\n      id: F\n      ccd: ATP\n"
+                "  - ligand:\n      id: G\n      ccd: [NAD, ZN]\n"
+            )
+
+            changes = SANITISE_INPUT.sanitise_boltz_yaml(source, destination)
+
+            self.assertEqual(changes, [])
+            self.assertEqual(destination.read_bytes(), source.read_bytes())
+
+    def test_normalises_all_supported_input_values(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            source = Path(temporary_directory) / "input.yaml"
+            destination = Path(temporary_directory) / "output.yaml"
+            source.write_text(
+                "sequences:\n"
+                "  - protein:\n      id: A\n      sequence: 'M K T*'\n"
+                "  - dna:\n      id: B\n      sequence: 'A C T G'\n"
+                "  - rna:\n      id: C\n      sequence: 'A C U G'\n"
+                "  - ligand:\n      id: D\n      smiles: 'C C O'\n"
+                "  - ligand:\n      id: E\n      ccd: ' ATP '\n"
+                "  - ligand:\n      id: F\n      ccd: ['NAD ', ' ZN']\n"
+            )
+
+            changes = SANITISE_INPUT.sanitise_boltz_yaml(source, destination)
+            data = yaml.safe_load(destination.read_text())
+
+            self.assertEqual(
+                changes,
+                [
+                    "removed terminal stop codon from 1 Boltz YAML sequence(s)",
+                    "removed 14 whitespace character(s) from Boltz YAML input data",
+                ],
+            )
+            self.assertEqual(data["sequences"][0]["protein"]["sequence"], "MKT")
+            self.assertEqual(data["sequences"][1]["dna"]["sequence"], "ACTG")
+            self.assertEqual(data["sequences"][2]["rna"]["sequence"], "ACUG")
+            self.assertEqual(data["sequences"][3]["ligand"]["smiles"], "CCO")
+            self.assertEqual(data["sequences"][4]["ligand"]["ccd"], "ATP")
+            self.assertEqual(data["sequences"][5]["ligand"]["ccd"], ["NAD", "ZN"])
+
+    def test_rejects_invalid_entity_values(self):
+        invalid_inputs = {
+            "invalid protein": (
+                "sequences:\n  - protein:\n      id: A\n      sequence: MKTAY?AKQR\n",
+                r"invalid amino acid character\(s\): \?",
+            ),
+            "colon-delimited protein": (
+                "sequences:\n  - protein:\n      id: [A, B]\n      sequence: MKT:AYI\n",
+                "use an id list",
+            ),
+            "invalid dna": (
+                "sequences:\n  - dna:\n      id: A\n      sequence: ACTUG\n",
+                "invalid nucleotide characters",
+            ),
+            "invalid rna": (
+                "sequences:\n  - rna:\n      id: A\n      sequence: ACUTG\n",
+                "invalid nucleotide characters",
+            ),
+            "invalid smiles": (
+                "sequences:\n  - ligand:\n      id: A\n      smiles: CCO?\n",
+                "unsupported characters",
+            ),
+            "empty ccd": (
+                "sequences:\n  - ligand:\n      id: A\n      ccd: []\n",
+                "non-empty list of strings",
+            ),
+            "non-string ccd": (
+                "sequences:\n  - ligand:\n      id: A\n      ccd: 123\n",
+                "string or non-empty list of strings",
+            ),
+        }
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            input_path = Path(temporary_directory) / "input.yaml"
+            for name, (contents, message) in invalid_inputs.items():
+                with self.subTest(name=name):
+                    input_path.write_text(contents)
+                    with self.assertRaisesRegex(SANITISE_INPUT.InputValidationError, message):
+                        SANITISE_INPUT.validate_boltz_yaml(input_path)
+
     def test_rejects_invalid_yaml_structure(self):
         invalid_inputs = {
             "empty sequences": "sequences: []\n",
