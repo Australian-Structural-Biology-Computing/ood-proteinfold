@@ -6,6 +6,7 @@ if [ -f "$ENV_FILE" ]; then
     . "$ENV_FILE"
     set +a
 fi
+OOD_SESSION_DIR=$(pwd -P)
 # Set defaults to prod if .env is not found
 RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
 PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
@@ -35,15 +36,28 @@ export PROTEINFOLD_VERSION
 set -xo pipefail
 set -eE
 
-# Define debug directory at the top
-NOW=$(date +%Y%m%d_%H%M%S)
-RUNNAME="${NOW}_${USER}"
+# Open OnDemand preserves this identifier when its Relaunch action creates a
+# new batch session. This lets Nextflow reuse state without tying it to a run
+# name, which users may legitimately reuse.
+RUNNAME="<%= context.resume_id %>"
+if [[ ! "${RUNNAME}" =~ ^[0-9]{8}_[0-9]{6}_[A-Za-z0-9._-]+$ ]]; then
+    echo "ERROR: Invalid ProteinFold resume identifier: ${RUNNAME}" >&2
+    exit 1
+fi
 
 BASE_DEBUGDIR=${BASE_DEBUGDIR:-"/srv/scratch/sbf/debug"}
 DEBUGDIR="${BASE_DEBUGDIR}/${RUNNAME}"
 
 BASE_NXF_WORK=${BASE_NXF_WORK:-"/srv/scratch/${USER}/.proteinfold/work"}
-export NXF_WORK="${BASE_NXF_WORK}/${RUNNAME}"
+RUN_STATE_DIR="${BASE_NXF_WORK}/${RUNNAME}"
+LAUNCH_DIR="${RUN_STATE_DIR}/launch"
+export NXF_WORK="${RUN_STATE_DIR}/work"
+SAMPLESHEET_STATE="${RUN_STATE_DIR}/samplesheet.path"
+
+RESUME_RUN=false
+if [ -s "${LAUNCH_DIR}/.nextflow/history" ]; then
+    RESUME_RUN=true
+fi
 
 BASE_OUT_DIR=${BASE_OUT_DIR:-"/srv/scratch/${USER}/proteinfold_output"}
 RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
@@ -79,7 +93,8 @@ export NXF_SINGULARITY_CACHEDIR="${NXF_SINGULARITY_CACHEDIR:-/srv/scratch/${USER
 export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
 export NXF_SINGULARITY_LIBRARYDIR="${NXF_SINGULARITY_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
 
-mkdir -p "${NXF_WORK}"
+mkdir -p "${LAUNCH_DIR}" "${NXF_WORK}"
+cd "${LAUNCH_DIR}"
 
 function check_depend_version() {
 	# Ensure that script is running in prod
@@ -137,7 +152,7 @@ print(":".join(chain[:-1] if chain.endswith("*") else chain for chain in chains)
 }
 
 function sanitise_input() {
-    if python3 ./sanitise_input.py "$@"; then
+    if python3 "${OOD_SESSION_DIR}/sanitise_input.py" "$@"; then
         return 0
     else
         local status=$?
@@ -182,7 +197,7 @@ MODE=""
 [[ "${user_input,,}" =~ \.(fa(sta)?|y(a)?ml)$ ]] && MODE="FASTA_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
-if [ "${MODE}" == "MANUAL_INPUT" ]; then
+if [ "${MODE}" == "MANUAL_INPUT" ] && [ "${RESUME_RUN}" == "false" ]; then
     if [ "${raw_user_input}" != "${whitespace_free_sequence}" ]; then
         echo "WARNING: Removed whitespace from manual sequence input" | tee "$(pwd)/WARNING.txt" >&2
     fi
@@ -240,8 +255,18 @@ case "${af_method}" in
     *)    OUTPUT_FORMAT="" ;;
 esac
 
-if [ "${MODE}" == "MANUAL_INPUT" ];
-then
+if [ "${RESUME_RUN}" == "true" ]; then
+    if [ ! -s "${SAMPLESHEET_STATE}" ]; then
+        echo "ERROR: Cannot resume because the saved samplesheet path is missing: ${SAMPLESHEET_STATE}" >&2
+        exit 1
+    fi
+    IFS= read -r SAMPLESHEET < "${SAMPLESHEET_STATE}"
+    if [ -z "${SAMPLESHEET}" ] || [ ! -r "${SAMPLESHEET}" ]; then
+        echo "ERROR: Cannot resume because the saved samplesheet is not readable: ${SAMPLESHEET}" >&2
+        exit 1
+    fi
+    echo "Previous Nextflow run found; reusing ${SAMPLESHEET}"
+elif [ "${MODE}" == "MANUAL_INPUT" ]; then
     # Check if input contains colon-delimited sequences
     if [[ "${user_input}" == *":"* ]]; then
         echo "Detected colon-delimited sequence input, converting to multi-FASTA format..."
@@ -253,10 +278,8 @@ then
     else
         create_and_normalise_samplesheet --aa-string "${user_input}" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
     fi
-fi
 
-if [ "${MODE}" == "SAMPLESHEET_INPUT" ];
-then
+elif [ "${MODE}" == "SAMPLESHEET_INPUT" ]; then
     if sanitise_input samplesheet "${user_input}" "$(pwd)/sanitised_samplesheet.csv" "$(pwd)/fasta/samplesheet_inputs" "$(pwd)/WARNING.txt" "${af_method}"; then
         SAMPLESHEET="$(pwd)/sanitised_samplesheet.csv"
     else
@@ -267,19 +290,15 @@ then
         fi
         SAMPLESHEET="${user_input}"
     fi
-fi
 
-if [ "${MODE}" == "FASTA_INPUT" ];
-then
+elif [ "${MODE}" == "FASTA_INPUT" ]; then
     mkdir -p fasta
     cp "${user_input}" ./fasta/
     dos2unix ./fasta/*
     sanitise_staged_directory
     create_and_normalise_samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
-fi
 
-if [ "${MODE}" == "DIRECTORY" ];
-then
+elif [ "${MODE}" == "DIRECTORY" ]; then
     mkdir -p fasta
     working_dir=$(pwd)
     cd "${user_input}"
@@ -318,6 +337,10 @@ then
     dos2unix "${staged_inputs[@]}"
     sanitise_staged_directory
     create_and_normalise_samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
+fi
+
+if [ "${RESUME_RUN}" == "false" ]; then
+    printf '%s\n' "${SAMPLESHEET}" > "${SAMPLESHEET_STATE}"
 fi
 
 if [ -f "$(pwd)/WARNING.txt" ]; then
@@ -465,6 +488,11 @@ if [[ "${ENABLE_METRICS}" == "true" ]]; then
 
 fi
 
+NEXTFLOW_RESUME_ARGS=()
+if [ "${RESUME_RUN}" == "true" ]; then
+    NEXTFLOW_RESUME_ARGS+=("-resume")
+fi
+
 nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run ${REPOSITORY} -r ${BRANCH} -latest \
     --input "${SAMPLESHEET}" \
     --outdir "${OUT_DIR}" \
@@ -472,4 +500,5 @@ nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run ${REPOSITORY} -r ${BRANCH} -latest \
     --use_gpu \
     --monochrome_logs \
     ${ARGS} \
+    "${NEXTFLOW_RESUME_ARGS[@]}" \
     -profile apptainer

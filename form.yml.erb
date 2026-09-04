@@ -1,4 +1,5 @@
 form:
+    - resume_id
     - data_warning
     - proteinfold_version
     - samplesheet
@@ -25,6 +26,11 @@ form:
 cluster: "katana"
 
 attributes:
+    resume_id:
+        widget: "hidden_field"
+        cacheable: false
+        value: "<%= Time.now.strftime('%Y%m%d_%H%M%S') %>_<%= ENV.fetch('USER', 'unknown') %>"
+
     data_warning:
         class: "d-none"
         help: |

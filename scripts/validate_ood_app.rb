@@ -24,6 +24,7 @@ class TemplateContext
 
   def initialize
     @context = OpenStruct.new(
+      resume_id: "20260904_120000_ci",
       run_name: "ci_run",
       samplesheet: "/tmp/samplesheet.csv",
       af_method: "colabfold",
