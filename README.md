@@ -67,7 +67,9 @@ DEBUGGROUP=sbf-pipelines
 # Base debug directory (job-specific DEBUGDIR set at runtime)
 BASE_DEBUGDIR=/srv/scratch/sbf/debug
 
-# Nextflow work directory base (job-specific NXF_WORK set at runtime)
+# Nextflow state directory base. Each new OOD launch gets a timestamped
+# subdirectory containing persistent launch/cache, work, and prepared input
+# state; OOD Relaunch reuses that subdirectory and enables Nextflow -resume.
 BASE_NXF_WORK=/srv/scratch/${USER}/.proteinfold/work
 
 # Apptainer/Singularity blob cache directories (set here or via your institutional Nextflow config, e.g. https://github.com/Australian-Structural-Biology-Computing/unsw_katana)
