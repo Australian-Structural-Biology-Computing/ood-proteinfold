@@ -271,7 +271,6 @@ def sanitise_fasta(source_path, destination_path, af_method=None):
     blank_lines = 0
     trailing_blank_lines = 0
     normalised_headers = 0
-    normalised_sequence_lines = 0
     normalised_line_endings = 0
     removed_sequence_whitespace = 0
     removed_terminal_stops = 0
@@ -289,7 +288,6 @@ def sanitise_fasta(source_path, destination_path, af_method=None):
             destination.write(value)
 
         def write_sequence(raw_line, line_number, is_final_line):
-            nonlocal normalised_sequence_lines
             nonlocal removed_sequence_whitespace
             nonlocal removed_terminal_stops
             nonlocal record_has_content
@@ -320,11 +318,9 @@ def sanitise_fasta(source_path, destination_path, af_method=None):
                 return
 
             normalised_sequence = f"{sequence}\n"
-            if raw_line != normalised_sequence:
-                normalised_sequence_lines += 1
-                removed_sequence_whitespace += (
-                    len(raw_line.rstrip("\r\n")) - len(unstripped_sequence)
-                )
+            removed_sequence_whitespace += len(raw_line.rstrip("\r\n")) - len(
+                unstripped_sequence
+            )
             record_sequence.append(sequence)
             write(normalised_sequence)
             record_has_content = True
@@ -418,8 +414,6 @@ def sanitise_fasta(source_path, destination_path, af_method=None):
         changes.append(
             f"removed terminal stop codon from {removed_terminal_stops} FASTA record(s)"
         )
-    if normalised_sequence_lines:
-        changes.append(f"normalised {normalised_sequence_lines} sequence line(s)")
     if removed_sequence_whitespace:
         changes.append(
             f"removed {removed_sequence_whitespace} whitespace character(s) from sequence data"

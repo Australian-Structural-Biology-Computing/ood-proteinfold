@@ -29,7 +29,6 @@ class SanitiseFastaTests(unittest.TestCase):
                 [
                     "normalised line endings in 3 line(s)",
                     "normalised 1 FASTA header(s)",
-                    "normalised 1 sequence line(s)",
                     "removed 2 whitespace character(s) from sequence data",
                 ],
             )
