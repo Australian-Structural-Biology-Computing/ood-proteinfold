@@ -83,6 +83,12 @@ BASE_NXF_WORK=/srv/scratch/${USER}/.proteinfold/work
 # NXF_SINGULARITY_LIBRARYDIR=/srv/scratch/sbf-pipelines/proteinfold/singularity
 ```
 
+Run names may be reused when the selected method or input IDs differ. The form
+checks the selected combination, and the job verifies the prepared samplesheet
+before Nextflow starts, to avoid overwriting matching method-and-input results.
+After Nextflow completes successfully, a marker in the persistent run state
+prevents later relaunches from submitting the completed workflow again.
+
 ### Python Environment for samplesheet-utils
 
 `samplesheet-utils` is required for generating and validating input samplesheets.

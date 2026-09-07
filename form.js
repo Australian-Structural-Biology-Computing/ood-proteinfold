@@ -438,6 +438,8 @@
     input.dataset.oodInputPreflightBound = "1";
 
     const methodControl = getFieldControl("af_method", "select");
+    const runNameControl = getFieldControl("run_name");
+    const resumeIdControl = getFieldControl("resume_id");
     const fieldContainer = getFieldContainer(input);
     const fileKinds = [
       [/\.fa(?:sta)?$/i, "fasta"],
@@ -455,6 +457,8 @@
     const severityOrder = { pass: 0, adjustment: 1, review: 2, error: 3 };
     let marker = document.getElementById("ood-proteinfold-input-warning");
     let summary = document.getElementById("ood-proteinfold-input-warning-summary");
+    let outputMarker = document.getElementById("ood-proteinfold-output-warning");
+    let outputSummary = document.getElementById("ood-proteinfold-output-warning-summary");
 
     if (!marker) {
       marker = document.createElement("button");
@@ -473,6 +477,35 @@
       summary.style.marginTop = "0.5rem";
       marker.insertAdjacentElement("afterend", summary);
     }
+    if (runNameControl && !outputMarker) {
+      outputMarker = document.createElement("button");
+      outputMarker.id = "ood-proteinfold-output-warning";
+      outputMarker.type = "button";
+      outputMarker.hidden = true;
+      outputMarker.style.cssText = "margin-left: 0.5rem; border: 0; border-radius: 50%; width: 1.4rem; height: 1.4rem; padding: 0; color: #fff; font-weight: 700; cursor: help;";
+      runNameControl.insertAdjacentElement("afterend", outputMarker);
+      outputSummary = document.createElement("div");
+      outputSummary.id = "ood-proteinfold-output-warning-summary";
+      outputSummary.hidden = true;
+      outputSummary.setAttribute("role", "alert");
+      outputSummary.style.marginTop = "0.5rem";
+      outputMarker.insertAdjacentElement("afterend", outputSummary);
+    }
+
+    const renderOutputCheck = (state, message) => {
+      if (!outputMarker || !outputSummary) return;
+      outputMarker.hidden = state === "waiting";
+      outputMarker.textContent = state === "checking" ? "..." : (state === "collision" ? "!" : "\u2713");
+      outputMarker.style.fontSize = state === "checking" ? "0.7rem" : "1rem";
+      outputMarker.style.background = state === "collision" ? "#dc3545" : (state === "clear" ? "#198754" : "#6c757d");
+      outputMarker.title = message;
+      outputMarker.setAttribute("aria-label", message);
+      outputSummary.hidden = state !== "collision";
+      outputSummary.className = "alert alert-danger";
+      outputSummary.textContent = state === "collision" ? message : "";
+      runNameControl.setCustomValidity(state === "collision" ? message : "");
+      getFieldContainer(runNameControl)?.classList.toggle("has-error", state === "collision");
+    };
 
     const getInputKind = (path) =>
       fileKinds.find(([pattern]) => pattern.test(path))?.[1] || null;
@@ -594,7 +627,9 @@
       return rows.map((values, index) => {
         const path = (values[1] || "").trim();
         if (!path) throw new Error(`Samplesheet row ${index + 2} is missing an input path.`);
-        return { path, rowNumber: index + 2 };
+        const sampleId = (values[0] || "").trim();
+        if (!sampleId) throw new Error(`Samplesheet row ${index + 2} is missing an input ID.`);
+        return { path, sampleId, rowNumber: index + 2 };
       });
     };
 
@@ -817,7 +852,7 @@
           throw new Error(`${label} contains an unsupported entity sequence.`);
         }
         validateEntitySequence(entityType, sequence, label);
-        records.push({ sequence, entityType });
+        records.push({ sequence, entityType, header });
       };
 
       for (const match of contents.matchAll(/([^\r\n]*)(\r\n|\r|\n|$)/g)) {
@@ -889,6 +924,7 @@
         hasUnknownProteinResidue: records.some(
           (record) => record.entityType === "protein" && record.sequence.includes("X")
         ),
+        sampleHeaders: records.map((record) => record.header).filter(Boolean),
         changes: warnings
       };
     };
@@ -1102,7 +1138,11 @@
             `Samplesheet row ${row.rowNumber} has unsupported input type: ${row.path}.`
           );
         }
-        return { ...file, label: `${file.label} (samplesheet row ${row.rowNumber})` };
+        return {
+          ...file,
+          sampleId: row.sampleId,
+          label: `${file.label} (samplesheet row ${row.rowNumber})`
+        };
       }));
     };
 
@@ -1124,13 +1164,91 @@
     let preflightTimer = null;
     let activeController = null;
     let lastCheckedFiles = null;
+    let outputTimer = null;
+    let outputController = null;
+
+    const generatedSampleId = (value) => {
+      return value.trim().replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
+    };
+    const candidateIds = () => {
+      if (!lastCheckedFiles) return [];
+      return [...new Set(lastCheckedFiles.flatMap((file) => {
+        if (file.error || file.ignoredForMethod) return [];
+        if (file.sampleId) return [file.sampleId];
+        if (file.sampleHeaders?.length) return [generatedSampleId(file.sampleHeaders[0])];
+        if (file.kind === "yaml") {
+          return [generatedSampleId(file.label.replace(/\.[^. ]+(?: \(.*\))?$/, ""))];
+        }
+        return [];
+      }).filter(Boolean))];
+    };
+    const listOutputTree = async (path, signal, depth = 0) => {
+      const response = await fetch(buildFilesUrl(path), {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+        signal
+      });
+      if (response.status === 404) return [];
+      if (!response.ok) throw new Error(`Could not inspect existing outputs (${response.status}).`);
+      const listing = await response.json();
+      const entries = listing.files || [];
+      if (depth >= 3) return entries.map((entry) => entry.name);
+      const nested = await Promise.all(entries
+        .filter((entry) => entry.type === "d")
+        .map((entry) => listOutputTree(`${path}/${entry.name}`, signal, depth + 1)));
+      return entries.map((entry) => entry.name).concat(...nested);
+    };
+    const checkOutputs = async (controller) => {
+      const ids = candidateIds();
+      const runName = runNameControl?.value.trim();
+      const user = (resumeIdControl?.value || "").split("_").slice(2).join("_");
+      if (!runName || !ids.length || !methodControl?.value || !user) {
+        renderOutputCheck("waiting", "Enter a run name and valid input to check existing outputs.");
+        return;
+      }
+      renderOutputCheck("checking", "Checking for existing outputs...");
+      const runDirectory = runName.replace(/[^A-Za-z0-9]/g, "_");
+      try {
+        const names = await listOutputTree(
+          `/srv/scratch/${user}/proteinfold_output/${runDirectory}/${methodControl.value}`,
+          controller.signal
+        );
+        const collisions = ids.filter((id) => names.some((name) =>
+          name === id || name.startsWith(`${id}_`) || name.startsWith(`${id}.`)
+        ));
+        if (collisions.length) {
+          renderOutputCheck(
+            "collision",
+            `Existing ${methodControl.value} outputs would be overwritten for input ID(s): ${collisions.join(", ")}. Change the run name, method, or input.`
+          );
+        } else {
+          renderOutputCheck("clear", "No outputs for this method and input combination would be overwritten.");
+        }
+      } catch (error) {
+        if (error.name !== "AbortError") renderOutputCheck("waiting", error.message);
+      }
+    };
+    const scheduleOutputCheck = () => {
+      outputController?.abort();
+      if (outputTimer) window.clearTimeout(outputTimer);
+      outputController = new AbortController();
+      outputTimer = window.setTimeout(() => checkOutputs(outputController), 250);
+    };
 
     const preflight = async (request, controller) => {
       const rawInput = input.value;
       const path = rawInput.trim();
       if (!path.startsWith("/")) {
         lastCheckedFiles = null;
-        render(analyseManualInput(rawInput));
+        const result = analyseManualInput(rawInput);
+        render(result);
+        const sequence = stripTerminalStops(removeWhitespace(rawInput));
+        if (result.severity !== "error" && sequence) {
+          lastCheckedFiles = [{
+            sampleId: generatedSampleId(sequence.slice(0, HEADERLESS_SEQUENCE_ID_LENGTH))
+          }];
+        }
+        scheduleOutputCheck();
         return;
       }
 
@@ -1152,10 +1270,12 @@
         if (request !== requestNumber) return;
         lastCheckedFiles = checkedFiles;
         render(analyseFiles(checkedFiles));
+        scheduleOutputCheck();
       } catch (error) {
         if (error.name === "AbortError" || request !== requestNumber) return;
         lastCheckedFiles = null;
         render(errorResult(`Could not check this input: ${error.message}`));
+        scheduleOutputCheck();
       }
     };
 
@@ -1173,6 +1293,7 @@
     };
 
     input.addEventListener("input", schedulePreflight);
+    runNameControl?.addEventListener("input", scheduleOutputCheck);
     if (methodControl && methodControl.dataset.oodInputLengthBound !== "1") {
       methodControl.addEventListener("change", () => {
         const path = input.value.trim();
@@ -1184,6 +1305,7 @@
         } else {
           schedulePreflight();
         }
+        scheduleOutputCheck();
       });
       methodControl.dataset.oodInputLengthBound = "1";
     }
