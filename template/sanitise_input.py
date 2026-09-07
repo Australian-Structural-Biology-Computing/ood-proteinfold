@@ -659,6 +659,45 @@ def sanitise_directory(directory, warning_path, af_method=None):
     write_warnings(warning_path, warnings)
 
 
+def check_output_collisions(samplesheet_path, output_directory, af_method):
+    """Refuse only sample IDs that already have outputs for the selected method."""
+    method_directory = os.path.join(output_directory, af_method)
+    if not os.path.isdir(method_directory):
+        return
+
+    with open(samplesheet_path, encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        id_column = next(
+            (name for name in (reader.fieldnames or []) if name.strip().lower() == "id"),
+            None,
+        )
+        if not id_column:
+            raise InputValidationError("Samplesheet has no id column for output checking")
+        sample_ids = {
+            (row.get(id_column) or "").strip() for row in reader
+        } - {""}
+
+    collisions = set()
+    for directory, subdirectories, filenames in os.walk(method_directory):
+        names = subdirectories + filenames
+        for sample_id in sample_ids - collisions:
+            if any(
+                name == sample_id
+                or name.startswith(f"{sample_id}_")
+                or name.startswith(f"{sample_id}.")
+                for name in names
+            ):
+                collisions.add(sample_id)
+        if collisions == sample_ids:
+            break
+
+    if collisions:
+        joined = ", ".join(sorted(collisions))
+        raise InputValidationError(
+            f"Existing {af_method} outputs would be overwritten for input ID(s): {joined}"
+        )
+
+
 def main():
     command, *arguments = sys.argv[1:]
     if command == "directory" and len(arguments) == 3:
@@ -667,6 +706,8 @@ def main():
         normalise_samplesheet_ids(*arguments)
     elif command == "samplesheet" and len(arguments) == 5:
         sanitise_samplesheet(*arguments)
+    elif command == "output-collisions" and len(arguments) == 3:
+        check_output_collisions(*arguments)
     else:
         raise ValueError(f"Unknown or invalid sanitisation input: {command}")
 
