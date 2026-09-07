@@ -11,29 +11,19 @@ OOD_SESSION_DIR=$(pwd -P)
 RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
 PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 DB_PATH=${DB_PATH:-/srv/scratch/sbf-pipelines/proteinfold/dbs}
-BRANCH=${BRANCH:-2.0.0}
-REPOSITORY=${REPOSITORY:-nf-core/proteinfold}
+BRANCH="master"
+REPOSITORY="Australian-Structural-Biology-Computing/proteinfold"
 DEBUGGROUP=${DEBUGGROUP:-sbf}
 METRICS_DIRECTORY=${METRICS_DIRECTORY:-/srv/scratch/sbf-pipelines/metrics}
 ENABLE_METRICS=${ENABLE_METRICS:-true}
 
-PROTEINFOLD_VERSION_SELECTION="<%= context.proteinfold_version %>"
-case "${PROTEINFOLD_VERSION_SELECTION}" in
-    dev)
-        REPOSITORY="Australian-Structural-Biology-Computing/proteinfold"
-        BRANCH="master"
-        PROTEINFOLD_VERSION="2.1.0dev"
-        ;;
-    release|*)
-        BRANCH="2.0.0"
-        PROTEINFOLD_VERSION="2.0.0"
-        ;;
-esac
+PROTEINFOLD_VERSION_SELECTION="dev"
+PROTEINFOLD_VERSION="2.1.0dev"
 
 export BRANCH
 export PROTEINFOLD_VERSION
 
-set -xo pipefail
+set -o pipefail
 set -eE
 
 # Open OnDemand preserves this identifier when its Relaunch action creates a
@@ -54,6 +44,7 @@ LAUNCH_DIR="${RUN_STATE_DIR}/launch"
 export NXF_WORK="${RUN_STATE_DIR}/work"
 SAMPLESHEET_STATE="${RUN_STATE_DIR}/samplesheet.path"
 COMPLETED_MARKER="${RUN_STATE_DIR}/.ood-completed"
+TRACE_LOG="${OOD_SESSION_DIR}/debug_commands.log"
 
 RESUME_RUN=false
 if [ -s "${LAUNCH_DIR}/.nextflow/history" ]; then
@@ -69,11 +60,6 @@ exec > >(tee -a "${LIVE_LOG}")
 exec 2>&1
 
 mkdir -p "${BASE_OUT_DIR}"
-if [ -e "${OUT_DIR}" ] && [ ! -d "${OUT_DIR}" ]; then
-    echo "ERROR: ProteinFold output path exists and is not a directory: ${OUT_DIR}" >&2
-    exit 1
-fi
-
 mkdir -p "${OUT_DIR}"
 
 if [ -f "${COMPLETED_MARKER}" ]; then
@@ -88,6 +74,7 @@ trap "collect_debug_files" ERR
 function collect_debug_files() {
     echo "Error occurred, copying debug files to ${DEBUGDIR}"
     mkdir -p "$DEBUGDIR"
+    cp -f "${TRACE_LOG}" "$DEBUGDIR/" 2>/dev/null || true
     rsync -a --no-perms --no-owner --no-group --max-size=50m . "${NXF_WORK}" "$DEBUGDIR/"
     find "$DEBUGDIR" -type d -exec chmod 2770 {} +
     find "$DEBUGDIR" -type f -exec chmod 660 {} +
@@ -109,6 +96,9 @@ export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR:-/srv/scratch/sbf-pi
 export NXF_SINGULARITY_LIBRARYDIR="${NXF_SINGULARITY_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
 
 mkdir -p "${LAUNCH_DIR}" "${NXF_WORK}"
+exec {TRACE_FD}>>"${TRACE_LOG}"
+BASH_XTRACEFD="${TRACE_FD}"
+set -x
 cd "${LAUNCH_DIR}"
 
 function check_depend_version() {
@@ -368,7 +358,7 @@ if [ -f "$(pwd)/WARNING.txt" ]; then
 fi
 
 PROT_MODE=""
-ARGS=""
+ARGS="--db ${DB_PATH}"
 NEXTFLOW_CONFIG_ARGS=("-c" "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config")
 COLABFOLD_RECYCLES="<%= context.colabfold_num_recycles %>"
 COLABFOLD_NUM_SEEDS="<%= context.colabfold_num_seeds %>"
@@ -402,7 +392,7 @@ fi
 
 if [ "<%= context.af_method %>" == "alphafold2" ]; then
     PROT_MODE="alphafold2"
-    ARGS="${ARGS} --alphafold2_db ${DB_PATH} --alphafold2_full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
+    ARGS="${ARGS} --alphafold2_full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
     if [ -n "${RANDOM_SEED}" ]; then
         ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
     fi
@@ -413,7 +403,7 @@ fi
 
 if [ "<%= context.af_method %>" == "boltz" ]; then
     PROT_MODE="boltz"
-    ARGS="${ARGS} --boltz_db ${DB_PATH} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER}"
+    ARGS="${ARGS} --use_msa_server ${USE_MSA_SERVER}"
     if [ -n "${RANDOM_SEED}" ]; then
         ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
     fi
@@ -433,12 +423,12 @@ if [ "<%= context.af_method %>" == "alphafold3" ]; then
     fi
 
     PROT_MODE="alphafold3"
-    ARGS="${ARGS} --alphafold3_db ${DB_PATH} --alphafold3_params_path ${AF3_WEIGHTS}"
+    ARGS="${ARGS} --alphafold3_params_path ${AF3_WEIGHTS}"
 fi
 
 if [ "<%= context.af_method %>" == "colabfold" ]; then
     PROT_MODE="colabfold"
-    ARGS="${ARGS} --colabfold_db ${DB_PATH} --use_msa_server ${USE_MSA_SERVER} --colabfold_model_preset ${prot_mode}"
+    ARGS="${ARGS} --use_msa_server ${USE_MSA_SERVER} --colabfold_model_preset ${prot_mode}"
 
     if [ -n "${COLABFOLD_RECYCLES}" ]; then
         ARGS="${ARGS} --colabfold_num_recycles ${COLABFOLD_RECYCLES}"
@@ -474,7 +464,7 @@ fi
 
 if [ "<%= context.af_method %>" == "esmfold" ]; then
     PROT_MODE="esmfold"
-    ARGS="${ARGS} --esmfold_db ${DB_PATH} --esmfold_model_preset ${prot_mode}"
+    ARGS="${ARGS} --esmfold_model_preset ${prot_mode}"
     if [ -n "${ESMFOLD_RECYCLES}" ]; then
         ARGS="${ARGS} --esmfold_num_recycles ${ESMFOLD_RECYCLES}"
     fi
