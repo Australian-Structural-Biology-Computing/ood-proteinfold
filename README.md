@@ -55,11 +55,7 @@ PROJECT_ROOT=/srv/scratch/sbf-pipelines/proteinfold
 # Database path for structure prediction modules
 DB_PATH=/srv/scratch/sbf-pipelines/proteinfold/dbs
 
-# Git branch/tag to use for proteinfold
-BRANCH=v2.0.0
-
-# Repository path for using alternative versions of proteinfold
-REPOSITORY=nf-core/proteinfold
+# Runs are currently pinned to the ASBC proteinfold master branch in script.sh.erb.
 
 # Debug group for permissions on debug files
 DEBUGGROUP=sbf-pipelines

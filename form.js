@@ -5,12 +5,6 @@
     "colabfold_use_dropout",
     "colabfold_max_msa"
   ];
-  const CHECKBOX_HIDE_RULES = {
-    colabfold_advanced_options: {
-      hideWhenChecked: new Set(),
-      hideWhenUnchecked: new Set(COLABFOLD_ADVANCED_HIDE_TARGETS)
-    },
-  };
   const HEADERLESS_SEQUENCE_ID_LENGTH = 6;
   const AMINO_ACID_SEQUENCE_PATTERN = /^[ACDEFGHIKLMNPQRSTVWYX]+$/;
   const ENTITY_TYPES = new Set(["protein", "ccd", "smiles", "dna", "rna"]);
@@ -38,17 +32,114 @@
     }
   };
 
+  const parseTruthy = (value) => {
+    if (value === null || value === undefined) return false;
+    return ["", "true", "1", "yes", "on"].includes(String(value).trim().toLowerCase());
+  };
+
+  const onPageLoad = (initialiser) => {
+    ["DOMContentLoaded", "turbo:load", "page:load"].forEach((eventName) => {
+      document.addEventListener(eventName, initialiser);
+    });
+  };
+
+  const addDescribedBy = (control, id) => {
+    if (!control || !id) return;
+    const ids = new Set((control.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean));
+    ids.add(id);
+    control.setAttribute("aria-describedby", [...ids].join(" "));
+  };
+
+  const sampleIdForInput = (file) => {
+    if (file.sampleId) return file.sampleId.trim();
+    if (file.manualSequence) {
+      return file.manualSequence.slice(0, HEADERLESS_SEQUENCE_ID_LENGTH);
+    }
+    return file.label
+      .replace(/ \(samplesheet row \d+\)$/, "")
+      .replace(/\.(?:fa|fasta|ya?ml)$/i, "")
+      .trim()
+      .replace(/\s+/g, "-");
+  };
+
+  const methodPreviewArguments = (values) => {
+    const method = values.af_method || "alphafold2";
+    const mode = values.prot_mode || "monomer_ptm";
+    const args = ["--mode", method];
+    const add = (name, value) => {
+      if (value !== "" && value !== null && value !== undefined) args.push(name, String(value));
+    };
+
+    if (method === "alphafold2") {
+      add("--alphafold2_full_dbs", values.full_dbs === "full");
+      add("--alphafold2_mode", "split_msa_prediction");
+      add("--random_seed", values.random_seed);
+      if (values.proteinfold_version === "release") add("--alphafold2_model_preset", mode);
+    } else if (method === "boltz") {
+      add("--use_msa_server", values.msa_server !== "local");
+      add("--random_seed", values.random_seed);
+      if (parseTruthy(values.boltz_use_potentials)) add("--boltz_use_potentials", true);
+    } else if (method === "alphafold3") {
+      add("--alphafold3_params_path", values.af3_weights);
+    } else if (method === "colabfold") {
+      add("--use_msa_server", values.msa_server !== "local");
+      add("--colabfold_model_preset", mode);
+      add("--colabfold_num_recycles", values.colabfold_num_recycles);
+    } else if (method === "esmfold") {
+      add("--esmfold_model_preset", mode);
+      add("--esmfold_num_recycles", values.esmfold_num_recycles);
+    }
+    if (parseTruthy(values.save_intermediates) ||
+        (method === "colabfold" && parseTruthy(values.colabfold_advanced_options))) {
+      add("--save_intermediates", true);
+    }
+    return args;
+  };
+
+  const commandPreviewArguments = (values) => {
+    const projectRoot = "/srv/scratch/sbf-pipelines/proteinfold";
+    const user = values.user || "${USER}";
+    const runDirectory = (values.run_name || "<run-name>").replace(/[^A-Za-z0-9]/g, "_");
+    const command = [
+      "nextflow",
+      "-c", `${projectRoot}/kod_proteinfold-dev.config`,
+      "run", "Australian-Structural-Biology-Computing/proteinfold",
+      "-r", "master",
+      "-latest",
+      "--input", values.samplesheet || "<input>",
+      "--outdir", `/srv/scratch/${user}/proteinfold_output/${runDirectory}`,
+      "--db", `${projectRoot}/proteinfold_microdbs`
+    ];
+    command.push(
+      ...methodPreviewArguments(values),
+      "--use_gpu",
+      "--monochrome_logs",
+      "-profile", "apptainer"
+    );
+    return command;
+  };
+
+  const formatShellArgument = (argument) => {
+    const value = String(argument).replace(/\\_/g, "_");
+    if (/^\$\{[A-Z_]+\}$/.test(value)) return `"${value}"`;
+    if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) return value;
+    return `'${value.replace(/'/g, "'\\''")}'`;
+  };
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+      commandPreviewArguments,
+      formatShellArgument,
+      methodPreviewArguments,
+      sampleIdForInput
+    };
+  }
+
   const escapeForSelector = (value) => {
     if (window.CSS && typeof window.CSS.escape === "function") {
       return window.CSS.escape(value);
     }
     return value.replace(/([ #;?%&,.+*~':"!^$\[\]()=>|/@])/g, "\\$1");
-  };
-
-  const parseTruthy = (value) => {
-    if (value === null || value === undefined) return false;
-    const normalised = String(value).trim().toLowerCase();
-    return normalised === "" || normalised === "true" || normalised === "1" || normalised === "yes" || normalised === "on";
   };
 
   const hasHideAttribute = (element) =>
@@ -78,22 +169,6 @@
       });
     });
     return targets;
-  };
-
-  const getFieldNameForControl = (element) => {
-    if (!element) return "";
-
-    const nameAttribute = element.getAttribute("name") || "";
-    const contextMatch = nameAttribute.match(/\[([^\]]+)\]$/);
-    if (contextMatch && contextMatch[1]) return contextMatch[1];
-
-    const idAttribute = element.getAttribute("id") || "";
-    const contextPrefix = `${CONTEXT_PREFIX}_`;
-    if (idAttribute.startsWith(contextPrefix)) {
-      return idAttribute.slice(contextPrefix.length).replace(/_id$/, "");
-    }
-
-    return idAttribute.replace(/_id$/, "");
   };
 
   const getFieldElements = (fieldName) => {
@@ -250,11 +325,8 @@
     const selectControllers = Array.from(document.querySelectorAll("select")).filter((select) =>
       Array.from(select.options).some(hasHideAttribute)
     );
-    const checkboxControllers = Array.from(document.querySelectorAll("input[type='checkbox']")).filter((checkbox) => {
-      const fieldName = getFieldNameForControl(checkbox);
-      return Boolean(fieldName && CHECKBOX_HIDE_RULES[fieldName]);
-    });
-    const controllers = [...selectControllers, ...checkboxControllers];
+    const advancedCheckbox = getFieldCheckbox("colabfold_advanced_options");
+    const controllers = [...selectControllers, advancedCheckbox].filter(Boolean);
 
     if (controllers.length === 0) return;
 
@@ -275,23 +347,7 @@
         });
       });
 
-      checkboxControllers.forEach((checkbox) => {
-        const fieldName = getFieldNameForControl(checkbox);
-        const rules = CHECKBOX_HIDE_RULES[fieldName];
-        if (!rules) return;
-
-        const allTargets = new Set([...rules.hideWhenChecked, ...rules.hideWhenUnchecked]);
-        const selectedHiddenTargets = checkbox.checked ? rules.hideWhenChecked : rules.hideWhenUnchecked;
-
-        allTargets.forEach((target) => {
-          const shouldHide = selectedHiddenTargets.has(target);
-          const previous = fieldHiddenState.get(target) || false;
-          fieldHiddenState.set(target, previous || shouldHide);
-        });
-      });
-
       const methodControl = getFieldControl("af_method", "select");
-      const advancedCheckbox = getFieldCheckbox("colabfold_advanced_options");
       const showAdvancedColabfoldOptions =
         methodControl &&
         methodControl.value === "colabfold" &&
@@ -317,9 +373,7 @@
     evaluate();
   };
 
-  document.addEventListener("DOMContentLoaded", initDynamicHide);
-  document.addEventListener("turbo:load", initDynamicHide);
-  document.addEventListener("page:load", initDynamicHide);
+  onPageLoad(initDynamicHide);
 
   const initMethodTokenLimitPanel = () => {
     const methodControl = getFieldControl("af_method", "select");
@@ -346,10 +400,8 @@
         return;
       }
 
-      const noteHtml = info.note ? `<div>${info.note}</div>` : "";
       panel.innerHTML = `
         ${info.title} approximate length limit: <strong>${info.limit.toLocaleString()}</strong>
-        ${noteHtml}
       `;
       panel.hidden = false;
     };
@@ -362,16 +414,15 @@
     update();
   };
 
-  document.addEventListener("DOMContentLoaded", initMethodTokenLimitPanel);
-  document.addEventListener("turbo:load", initMethodTokenLimitPanel);
-  document.addEventListener("page:load", initMethodTokenLimitPanel);
+  onPageLoad(initMethodTokenLimitPanel);
 
   const initSaveIntermediatesWarning = () => {
     const checkbox = getFieldCheckbox('save_intermediates');
-    if (!checkbox) return;
+    if (!checkbox || checkbox.dataset.oodWarningBound === "1") return;
 
     const warning = document.getElementById(`${CONTEXT_PREFIX}_save_intermediates_warning`) || document.getElementById('save_intermediates_warning');
     if (!warning) return;
+    checkbox.dataset.oodWarningBound = "1";
 
     const update = () => {
       if (checkbox.checked) warning.classList.remove('d-none');
@@ -382,9 +433,7 @@
     update();
   };
 
-  document.addEventListener("DOMContentLoaded", initSaveIntermediatesWarning);
-  document.addEventListener("turbo:load", initSaveIntermediatesWarning);
-  document.addEventListener("page:load", initSaveIntermediatesWarning);
+  onPageLoad(initSaveIntermediatesWarning);
 
   const initColabfoldAdvancedEnforce = () => {
     const advCheckbox = getFieldCheckbox('colabfold_advanced_options');
@@ -428,9 +477,44 @@
     evaluate();
   };
 
-  document.addEventListener("DOMContentLoaded", initColabfoldAdvancedEnforce);
-  document.addEventListener("turbo:load", initColabfoldAdvancedEnforce);
-  document.addEventListener("page:load", initColabfoldAdvancedEnforce);
+  onPageLoad(initColabfoldAdvancedEnforce);
+
+  const initCommandPreview = () => {
+    const preview = document.getElementById("ood-proteinfold-command-preview");
+    if (!preview || preview.dataset.oodCommandPreviewBound === "1") return;
+    preview.dataset.oodCommandPreviewBound = "1";
+
+    const previewControl = getFieldControl("command_preview");
+    if (previewControl) previewControl.hidden = true;
+
+    const fieldNames = [
+      "resume_id", "samplesheet", "run_name", "af_method", "af3_weights", "prot_mode",
+      "full_dbs", "random_seed",
+      "colabfold_num_recycles", "colabfold_advanced_options",
+      "colabfold_max_msa", "colabfold_num_seeds", "colabfold_use_dropout", "esmfold_num_recycles",
+      "boltz_use_potentials", "save_intermediates", "msa_server"
+    ];
+    const controls = Object.fromEntries(
+      fieldNames.map((name) => [name, getFieldControl(name)])
+    );
+    const render = () => {
+      const values = Object.fromEntries(Object.entries(controls).map(([name, element]) => [
+        name,
+        element?.matches("input[type='checkbox']") ? element.checked : (element?.value || "")
+      ]));
+      values.user = values.resume_id.split("_").slice(2).join("_") || "${USER}";
+      preview.textContent = commandPreviewArguments(values)
+        .map(formatShellArgument)
+        .join(" ");
+    };
+    Object.values(controls).forEach((element) => {
+      element?.addEventListener("input", render);
+      element?.addEventListener("change", render);
+    });
+    render();
+  };
+
+  onPageLoad(initCommandPreview);
 
   const initInputPreflight = () => {
     const input = getFieldControl("samplesheet");
@@ -461,36 +545,41 @@
     let outputSummary = document.getElementById("ood-proteinfold-output-warning-summary");
 
     if (!marker) {
-      marker = document.createElement("button");
+      marker = document.createElement("span");
       marker.id = "ood-proteinfold-input-warning";
-      marker.type = "button";
       marker.hidden = true;
-      marker.setAttribute("aria-label", "Input warnings");
-      marker.style.cssText = "margin-left: 0.5rem; border: 0; border-radius: 50%; width: 1.4rem; height: 1.4rem; padding: 0; background: #ffc107; color: #212529; font-weight: 700; cursor: help;";
+      marker.setAttribute("aria-hidden", "true");
+      marker.style.cssText = "display: inline-flex; align-items: center; justify-content: center; margin-left: 0.5rem; border-radius: 50%; width: 1.4rem; height: 1.4rem; background: #ffc107; color: #212529; font-weight: 700;";
       input.insertAdjacentElement("afterend", marker);
     }
     if (!summary) {
       summary = document.createElement("div");
       summary.id = "ood-proteinfold-input-warning-summary";
       summary.hidden = true;
-      summary.setAttribute("role", "alert");
+      summary.setAttribute("role", "status");
+      summary.setAttribute("aria-live", "polite");
+      summary.setAttribute("aria-atomic", "true");
       summary.style.marginTop = "0.5rem";
       marker.insertAdjacentElement("afterend", summary);
     }
+    addDescribedBy(input, summary.id);
     if (runNameControl && !outputMarker) {
-      outputMarker = document.createElement("button");
+      outputMarker = document.createElement("span");
       outputMarker.id = "ood-proteinfold-output-warning";
-      outputMarker.type = "button";
       outputMarker.hidden = true;
-      outputMarker.style.cssText = "margin-left: 0.5rem; border: 0; border-radius: 50%; width: 1.4rem; height: 1.4rem; padding: 0; color: #fff; font-weight: 700; cursor: help;";
+      outputMarker.setAttribute("aria-hidden", "true");
+      outputMarker.style.cssText = "display: inline-flex; align-items: center; justify-content: center; margin-left: 0.5rem; border-radius: 50%; width: 1.4rem; height: 1.4rem; color: #fff; font-weight: 700;";
       runNameControl.insertAdjacentElement("afterend", outputMarker);
       outputSummary = document.createElement("div");
       outputSummary.id = "ood-proteinfold-output-warning-summary";
       outputSummary.hidden = true;
-      outputSummary.setAttribute("role", "alert");
+      outputSummary.setAttribute("role", "status");
+      outputSummary.setAttribute("aria-live", "polite");
+      outputSummary.setAttribute("aria-atomic", "true");
       outputSummary.style.marginTop = "0.5rem";
       outputMarker.insertAdjacentElement("afterend", outputSummary);
     }
+    addDescribedBy(runNameControl, outputSummary?.id);
 
     const renderOutputCheck = (state, message) => {
       if (!outputMarker || !outputSummary) return;
@@ -499,8 +588,9 @@
       outputMarker.style.fontSize = state === "checking" ? "0.7rem" : "1rem";
       outputMarker.style.background = state === "collision" ? "#dc3545" : (state === "clear" ? "#198754" : "#6c757d");
       outputMarker.title = message;
-      outputMarker.setAttribute("aria-label", message);
       outputSummary.hidden = state !== "collision";
+      outputSummary.setAttribute("role", state === "collision" ? "alert" : "status");
+      outputSummary.setAttribute("aria-live", state === "collision" ? "assertive" : "polite");
       outputSummary.className = "alert alert-danger";
       outputSummary.textContent = state === "collision" ? message : "";
       runNameControl.setCustomValidity(state === "collision" ? message : "");
@@ -533,18 +623,20 @@
       const hasWarnings = messages.length > 0;
       const hasRunnableStatus = totalInputs !== null;
       const needsAttention = severity === "error";
+      input.setCustomValidity(needsAttention ? (message || "Input needs attention before the run.") : "");
       marker.hidden = !checked && !hasWarnings;
       marker.textContent = hasWarnings ? "!" : "\u2713";
       marker.style.fontSize = "1rem";
       marker.title = hasRunnableStatus
         ? `${runnableInputs}/${totalInputs} inputs runnable.${message ? ` ${message}` : ""}`
         : (message || "Input checked; no sanitisation is required.");
-      marker.setAttribute("aria-label", marker.title);
       marker.style.background = needsAttention
         ? "#dc3545"
         : (hasWarnings ? "#ffc107" : "#198754");
       marker.style.color = hasWarnings && !needsAttention ? "#212529" : "#ffffff";
       summary.hidden = !hasWarnings && !hasRunnableStatus;
+      summary.setAttribute("role", needsAttention ? "alert" : "status");
+      summary.setAttribute("aria-live", needsAttention ? "assertive" : "polite");
       summary.className = needsAttention
         ? "alert alert-danger"
         : (hasWarnings ? "alert alert-warning" : "alert alert-success");
@@ -581,7 +673,7 @@
       marker.hidden = false;
       marker.textContent = "...";
       marker.title = "Checking input";
-      marker.setAttribute("aria-label", marker.title);
+      input.setCustomValidity("");
       marker.style.background = "#6c757d";
       marker.style.color = "#ffffff";
       marker.style.fontSize = "0.7rem";
@@ -1167,36 +1259,26 @@
     let outputTimer = null;
     let outputController = null;
 
-    const generatedSampleId = (value) => {
-      return value.trim().replace(/[^A-Za-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
-    };
     const candidateIds = () => {
       if (!lastCheckedFiles) return [];
-      return [...new Set(lastCheckedFiles.flatMap((file) => {
-        if (file.error || file.ignoredForMethod) return [];
-        if (file.sampleId) return [file.sampleId];
-        if (file.sampleHeaders?.length) return [generatedSampleId(file.sampleHeaders[0])];
-        if (file.kind === "yaml") {
-          return [generatedSampleId(file.label.replace(/\.[^. ]+(?: \(.*\))?$/, ""))];
-        }
-        return [];
-      }).filter(Boolean))];
+      return [...new Set(lastCheckedFiles
+        .filter((file) => !file.error && !file.ignoredForMethod)
+        .map(sampleIdForInput)
+        .filter(Boolean))];
     };
-    const listOutputTree = async (path, signal, depth = 0) => {
-      const response = await fetch(buildFilesUrl(path), {
-        credentials: "same-origin",
-        headers: { Accept: "application/json" },
-        signal
-      });
-      if (response.status === 404) return [];
-      if (!response.ok) throw new Error(`Could not inspect existing outputs (${response.status}).`);
-      const listing = await response.json();
-      const entries = listing.files || [];
-      if (depth >= 3) return entries.map((entry) => entry.name);
-      const nested = await Promise.all(entries
-        .filter((entry) => entry.type === "d")
-        .map((entry) => listOutputTree(`${path}/${entry.name}`, signal, depth + 1)));
-      return entries.map((entry) => entry.name).concat(...nested);
+    const listOutputNames = async (paths, signal) => {
+      const listings = await Promise.all(paths.map(async (path) => {
+        const response = await fetch(buildFilesUrl(path), {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          signal
+        });
+        if (response.status === 404) return [];
+        if (!response.ok) throw new Error(`Could not inspect existing outputs (${response.status}).`);
+        const listing = await response.json();
+        return (listing.files || []).map((entry) => entry.name);
+      }));
+      return listings.flat();
     };
     const checkOutputs = async (controller) => {
       const ids = candidateIds();
@@ -1209,10 +1291,11 @@
       renderOutputCheck("checking", "Checking for existing outputs...");
       const runDirectory = runName.replace(/[^A-Za-z0-9]/g, "_");
       try {
-        const names = await listOutputTree(
-          `/srv/scratch/${user}/proteinfold_output/${runDirectory}/${methodControl.value}`,
-          controller.signal
-        );
+        const methodPath = `/srv/scratch/${user}/proteinfold_output/${runDirectory}/${methodControl.value}`;
+        const outputPaths = methodControl.value === "alphafold2"
+          ? [methodPath, `${methodPath}/split_msa_prediction`]
+          : [methodPath];
+        const names = await listOutputNames(outputPaths, controller.signal);
         const collisions = ids.filter((id) => names.some((name) =>
           name === id || name.startsWith(`${id}_`) || name.startsWith(`${id}.`)
         ));
@@ -1244,9 +1327,7 @@
         render(result);
         const sequence = stripTerminalStops(removeWhitespace(rawInput));
         if (result.severity !== "error" && sequence) {
-          lastCheckedFiles = [{
-            sampleId: generatedSampleId(sequence.slice(0, HEADERLESS_SEQUENCE_ID_LENGTH))
-          }];
+          lastCheckedFiles = [{ manualSequence: sequence }];
         }
         scheduleOutputCheck();
         return;
@@ -1312,7 +1393,5 @@
     if (input.value.trim()) schedulePreflight();
   };
 
-  document.addEventListener("DOMContentLoaded", initInputPreflight);
-  document.addEventListener("turbo:load", initInputPreflight);
-  document.addEventListener("page:load", initInputPreflight);
+  onPageLoad(initInputPreflight);
 })();

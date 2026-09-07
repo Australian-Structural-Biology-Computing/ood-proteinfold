@@ -662,8 +662,6 @@ def sanitise_directory(directory, warning_path, af_method=None):
 def check_output_collisions(samplesheet_path, output_directory, af_method):
     """Refuse only sample IDs that already have outputs for the selected method."""
     method_directory = os.path.join(output_directory, af_method)
-    if not os.path.isdir(method_directory):
-        return
 
     with open(samplesheet_path, encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -677,19 +675,25 @@ def check_output_collisions(samplesheet_path, output_directory, af_method):
             (row.get(id_column) or "").strip() for row in reader
         } - {""}
 
-    collisions = set()
-    for directory, subdirectories, filenames in os.walk(method_directory):
-        names = subdirectories + filenames
-        for sample_id in sample_ids - collisions:
-            if any(
-                name == sample_id
-                or name.startswith(f"{sample_id}_")
-                or name.startswith(f"{sample_id}.")
-                for name in names
-            ):
-                collisions.add(sample_id)
-        if collisions == sample_ids:
-            break
+    output_directories = [method_directory]
+    if af_method == "alphafold2":
+        output_directories.append(os.path.join(method_directory, "split_msa_prediction"))
+    names = {
+        name
+        for directory in output_directories
+        if os.path.isdir(directory)
+        for name in os.listdir(directory)
+    }
+    collisions = {
+        sample_id
+        for sample_id in sample_ids
+        if any(
+            name == sample_id
+            or name.startswith(f"{sample_id}_")
+            or name.startswith(f"{sample_id}.")
+            for name in names
+        )
+    }
 
     if collisions:
         joined = ", ".join(sorted(collisions))
