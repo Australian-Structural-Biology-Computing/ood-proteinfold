@@ -68,6 +68,12 @@ LIVE_LOG="live_log.log"
 exec > >(tee -a "${LIVE_LOG}")
 exec 2>&1
 
+mkdir -p "${BASE_OUT_DIR}"
+if [ -e "${OUT_DIR}" ] && [ ! -d "${OUT_DIR}" ]; then
+    echo "ERROR: ProteinFold output path exists and is not a directory: ${OUT_DIR}" >&2
+    exit 1
+fi
+
 mkdir -p "${OUT_DIR}"
 
 if [ -f "${COMPLETED_MARKER}" ]; then
