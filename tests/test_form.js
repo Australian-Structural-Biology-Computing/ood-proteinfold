@@ -26,30 +26,24 @@ const pairs = (argumentsList) => Object.fromEntries(
 assert.deepEqual(
   pairs(methodPreviewArguments({
     af_method: "alphafold2",
-    proteinfold_version: "release",
-    prot_mode: "multimer",
     full_dbs: "full",
     random_seed: "42"
   })),
   {
     "--mode": "alphafold2",
-    "--alphafold2_full_dbs": "true",
-    "--alphafold2_mode": "split_msa_prediction",
-    "--random_seed": "42",
-    "--alphafold2_model_preset": "multimer"
+    "--full_dbs": "true",
+    "--random_seed": "42"
   }
 );
 
 assert.deepEqual(
   pairs(methodPreviewArguments({
     af_method: "boltz",
-    msa_server: "remote",
     random_seed: "7",
     boltz_use_potentials: true
   })),
   {
     "--mode": "boltz",
-    "--use_msa_server": "true",
     "--random_seed": "7",
     "--boltz_use_potentials": "true"
   }
@@ -63,13 +57,11 @@ assert.deepEqual(
 assert.deepEqual(
   pairs(methodPreviewArguments({
     af_method: "esmfold",
-    prot_mode: "monomer",
     esmfold_num_recycles: "8",
     save_intermediates: true
   })),
   {
     "--mode": "esmfold",
-    "--esmfold_model_preset": "monomer",
     "--esmfold_num_recycles": "8",
     "--save_intermediates": "true"
   }
@@ -78,15 +70,13 @@ assert.deepEqual(
 assert.deepEqual(
   pairs(methodPreviewArguments({
     af_method: "colabfold",
-    prot_mode: "monomer_ptm",
-    msa_server: "local",
+    random_seed: "11",
     colabfold_num_recycles: "6",
     colabfold_advanced_options: true
   })),
   {
     "--mode": "colabfold",
-    "--use_msa_server": "false",
-    "--colabfold_model_preset": "monomer_ptm",
+    "--random_seed": "11",
     "--colabfold_num_recycles": "6",
     "--save_intermediates": "true"
   }
@@ -98,7 +88,6 @@ assert.deepEqual(
     samplesheet: "/data/samplesheet.csv",
     run_name: "ESM run",
     af_method: "esmfold",
-    prot_mode: "monomer_ptm",
     esmfold_num_recycles: "1"
   }),
   [
@@ -111,7 +100,6 @@ assert.deepEqual(
     "--outdir", "/srv/scratch/z1234567/proteinfold_output/ESM_run",
     "--db", "/srv/scratch/sbf-pipelines/proteinfold/proteinfold_microdbs",
     "--mode", "esmfold",
-    "--esmfold_model_preset", "monomer_ptm",
     "--esmfold_num_recycles", "1",
     "--use_gpu", "--monochrome_logs",
     "-profile", "apptainer"
@@ -121,7 +109,7 @@ assert.deepEqual(
 assert.equal(sampleIdForInput({ sampleId: "sheet-id", label: "ignored.fasta" }), "sheet-id");
 assert.equal(sampleIdForInput({ manualSequence: "ACDEFGHIK" }), "ACDEFG");
 assert.equal(sampleIdForInput({ label: "my protein.fasta" }), "my-protein");
-assert.equal(formatShellArgument("--esmfold_model_preset"), "--esmfold_model_preset");
+assert.equal(formatShellArgument("--esmfold_num_recycles"), "--esmfold_num_recycles");
 assert.equal(formatShellArgument("/path/with\\_underscores/file.csv"), "/path/with_underscores/file.csv");
 assert.equal(formatShellArgument("run with spaces"), "'run with spaces'");
 assert.equal(formatShellArgument("${USER}"), '"${USER}"');

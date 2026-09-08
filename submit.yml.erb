@@ -12,7 +12,7 @@ batch_connect:
 script:
     native:
     # ColabFold local DBs are only available locally on certain nodes. This is an example method for catching local ColabFold runs
-     <% if (af_method == "colabfold" || af_method == "boltz") && msa_server == "local" %>
+     <% if af_method == "colabfold" || af_method == "boltz" %>
          - "-l select=1:mwacgpu12=gpu-mwac:ncpus=8:ngpus=1:mem=124gb"
          - "-l walltime=48:00:00"
          - "-N <%= (run_name || 'kod_proteinfold').gsub(' ', '_') %>"

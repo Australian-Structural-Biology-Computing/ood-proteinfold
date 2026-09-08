@@ -93,7 +93,7 @@ You must create a Python virtual environment and install the correct version:
 ```bash
 python3 -m venv ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv
 source ${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate
-pip install samplesheet-utils==1.1.2
+pip install samplesheet-utils==1.3.4
 ```
 
 Update the paths in `.env` if your environment is elsewhere.

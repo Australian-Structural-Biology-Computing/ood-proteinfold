@@ -17,7 +17,6 @@ DEBUGGROUP=${DEBUGGROUP:-sbf}
 METRICS_DIRECTORY=${METRICS_DIRECTORY:-/srv/scratch/sbf-pipelines/metrics}
 ENABLE_METRICS=${ENABLE_METRICS:-true}
 
-PROTEINFOLD_VERSION_SELECTION="dev"
 PROTEINFOLD_VERSION="2.1.0dev"
 
 export BRANCH
@@ -230,36 +229,6 @@ fi
 create-samplesheet --version
 SAMPLESHEET=""
 
-prot_mode="<%= context.prot_mode %>"
-
-# Auto-set multimer mode for colon-delimited sequences
-if [[ "${user_input}" == *":"* ]]; then
-    echo "Colon-delimited sequence detected, automatically setting mode to multimer"
-    prot_mode="multimer"
-fi
-
-# Remap prot_mode if af_method is esmfold and prot_mode is monomer_ptm
-if [ "${af_method}" == "esmfold" ] && [ "${prot_mode}" == "monomer_ptm" ]; then
-    prot_mode="monomer"
-fi
-
-if [ "${af_method}" == "colabfold" ] || [ "${af_method}" == "boltz" ]; then
-    case "${prot_mode}" in
-        monomer|monomer_ptm)
-            prot_mode="alphafold2_ptm"
-            ;;
-        multimer)
-            prot_mode="alphafold2_multimer_v3"
-            ;;
-    esac
-fi
-
-OUTPUT_FORMAT=""
-case "${af_method}" in
-    helixfold3)  OUTPUT_FORMAT="--json" ;;
-    *)    OUTPUT_FORMAT="" ;;
-esac
-
 if [ "${RESUME_RUN}" == "true" ]; then
     if [ ! -s "${SAMPLESHEET_STATE}" ]; then
         echo "ERROR: Cannot resume because the saved samplesheet path is missing: ${SAMPLESHEET_STATE}" >&2
@@ -276,12 +245,12 @@ elif [ "${MODE}" == "MANUAL_INPUT" ]; then
     if [[ "${user_input}" == *":"* ]]; then
         echo "Detected colon-delimited sequence input, converting to multi-FASTA format..."
         mkdir -p fasta
-        temp_fasta_file="./fasta/converted_multimer.fasta"
+        temp_fasta_file="./fasta/converted_multichain.fasta"
         convert_colon_delimited_to_fasta "${user_input}" "${temp_fasta_file}"
-        create_and_normalise_samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
+        create_and_normalise_samplesheet --directory "./fasta"
         echo "Successfully converted colon-delimited input to multi-FASTA and created samplesheet"
     else
-        create_and_normalise_samplesheet --aa-string "${user_input}" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
+        create_and_normalise_samplesheet --aa-string "${user_input}"
     fi
 
 elif [ "${MODE}" == "SAMPLESHEET_INPUT" ]; then
@@ -301,7 +270,7 @@ elif [ "${MODE}" == "FASTA_INPUT" ]; then
     cp "${user_input}" ./fasta/
     dos2unix ./fasta/*
     sanitise_staged_directory
-    create_and_normalise_samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
+    create_and_normalise_samplesheet --directory "./fasta"
 
 elif [ "${MODE}" == "DIRECTORY" ]; then
     mkdir -p fasta
@@ -341,7 +310,7 @@ elif [ "${MODE}" == "DIRECTORY" ]; then
     fi
     dos2unix "${staged_inputs[@]}"
     sanitise_staged_directory
-    create_and_normalise_samplesheet --directory "./fasta" --suffix "${prot_mode}" ${OUTPUT_FORMAT}
+    create_and_normalise_samplesheet --directory "./fasta"
 fi
 
 if [ "${RESUME_RUN}" == "false" ]; then
@@ -357,7 +326,7 @@ if [ -f "$(pwd)/WARNING.txt" ]; then
     cp "$(pwd)/WARNING.txt" "${OUT_DIR}/WARNING.txt"
 fi
 
-PROT_MODE=""
+PIPELINE_MODE=""
 ARGS="--db ${DB_PATH}"
 NEXTFLOW_CONFIG_ARGS=("-c" "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config")
 COLABFOLD_RECYCLES="<%= context.colabfold_num_recycles %>"
@@ -383,27 +352,16 @@ else
     FULL_DB="false"
 fi
 
-if [ "<%= context.msa_server %>" == "local" ];
-then
-    USE_MSA_SERVER="false"
-else
-    USE_MSA_SERVER="true"
-fi
-
 if [ "<%= context.af_method %>" == "alphafold2" ]; then
-    PROT_MODE="alphafold2"
-    ARGS="${ARGS} --alphafold2_full_dbs ${FULL_DB} --alphafold2_mode split_msa_prediction"
+    PIPELINE_MODE="alphafold2"
+    ARGS="${ARGS} --full_dbs ${FULL_DB}"
     if [ -n "${RANDOM_SEED}" ]; then
         ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
-    fi
-    if [ "${PROTEINFOLD_VERSION_SELECTION}" == "release" ] && [ -n "${prot_mode}" ]; then
-        ARGS="${ARGS} --alphafold2_model_preset ${prot_mode}"
     fi
 fi
 
 if [ "<%= context.af_method %>" == "boltz" ]; then
-    PROT_MODE="boltz"
-    ARGS="${ARGS} --use_msa_server ${USE_MSA_SERVER}"
+    PIPELINE_MODE="boltz"
     if [ -n "${RANDOM_SEED}" ]; then
         ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
     fi
@@ -422,13 +380,15 @@ if [ "<%= context.af_method %>" == "alphafold3" ]; then
         exit 1
     fi
 
-    PROT_MODE="alphafold3"
+    PIPELINE_MODE="alphafold3"
     ARGS="${ARGS} --alphafold3_params_path ${AF3_WEIGHTS}"
 fi
 
 if [ "<%= context.af_method %>" == "colabfold" ]; then
-    PROT_MODE="colabfold"
-    ARGS="${ARGS} --use_msa_server ${USE_MSA_SERVER} --colabfold_model_preset ${prot_mode}"
+    PIPELINE_MODE="colabfold"
+    if [ -n "${RANDOM_SEED}" ]; then
+        ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
+    fi
 
     if [ -n "${COLABFOLD_RECYCLES}" ]; then
         ARGS="${ARGS} --colabfold_num_recycles ${COLABFOLD_RECYCLES}"
@@ -438,9 +398,6 @@ if [ "<%= context.af_method %>" == "colabfold" ]; then
 
     if [ -n "${COLABFOLD_NUM_SEEDS}" ]; then
         COLABFOLD_BATCH_EXTRA_ARGS="${COLABFOLD_BATCH_EXTRA_ARGS} --num-seeds ${COLABFOLD_NUM_SEEDS}"
-    fi
-    if [ -n "${RANDOM_SEED}" ]; then
-        COLABFOLD_BATCH_EXTRA_ARGS="${COLABFOLD_BATCH_EXTRA_ARGS} --random-seed ${RANDOM_SEED}"
     fi
     if [ "${COLABFOLD_USE_DROPOUT}" == "true" ]; then
         COLABFOLD_BATCH_EXTRA_ARGS="${COLABFOLD_BATCH_EXTRA_ARGS} --use-dropout"
@@ -463,8 +420,7 @@ EOF
 fi
 
 if [ "<%= context.af_method %>" == "esmfold" ]; then
-    PROT_MODE="esmfold"
-    ARGS="${ARGS} --esmfold_model_preset ${prot_mode}"
+    PIPELINE_MODE="esmfold"
     if [ -n "${ESMFOLD_RECYCLES}" ]; then
         ARGS="${ARGS} --esmfold_num_recycles ${ESMFOLD_RECYCLES}"
     fi
@@ -485,7 +441,7 @@ if [[ "${ENABLE_METRICS}" == "true" ]]; then
       --arg user "$(whoami)" \
       --arg node "$(hostname)" \
       --arg pbs_jobid "${PBS_JOBID}" \
-      --arg mode "${PROT_MODE}" \
+      --arg mode "${PIPELINE_MODE}" \
       --arg repository "${REPOSITORY}" \
       --arg branch "${BRANCH}" \
       --arg input "${SAMPLESHEET}" \
@@ -506,7 +462,7 @@ fi
 nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run ${REPOSITORY} -r ${BRANCH} -latest \
     --input "${SAMPLESHEET}" \
     --outdir "${OUT_DIR}" \
-    --mode "${PROT_MODE}" \
+    --mode "${PIPELINE_MODE}" \
     --use_gpu \
     --monochrome_logs \
     ${ARGS} \
