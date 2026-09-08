@@ -64,29 +64,23 @@
 
   const methodPreviewArguments = (values) => {
     const method = values.af_method || "alphafold2";
-    const mode = values.prot_mode || "monomer_ptm";
     const args = ["--mode", method];
     const add = (name, value) => {
       if (value !== "" && value !== null && value !== undefined) args.push(name, String(value));
     };
 
     if (method === "alphafold2") {
-      add("--alphafold2_full_dbs", values.full_dbs === "full");
-      add("--alphafold2_mode", "split_msa_prediction");
+      add("--full_dbs", values.full_dbs === "full");
       add("--random_seed", values.random_seed);
-      if (values.proteinfold_version === "release") add("--alphafold2_model_preset", mode);
     } else if (method === "boltz") {
-      add("--use_msa_server", values.msa_server !== "local");
       add("--random_seed", values.random_seed);
       if (parseTruthy(values.boltz_use_potentials)) add("--boltz_use_potentials", true);
     } else if (method === "alphafold3") {
       add("--alphafold3_params_path", values.af3_weights);
     } else if (method === "colabfold") {
-      add("--use_msa_server", values.msa_server !== "local");
-      add("--colabfold_model_preset", mode);
+      add("--random_seed", values.random_seed);
       add("--colabfold_num_recycles", values.colabfold_num_recycles);
     } else if (method === "esmfold") {
-      add("--esmfold_model_preset", mode);
       add("--esmfold_num_recycles", values.esmfold_num_recycles);
     }
     if (parseTruthy(values.save_intermediates) ||
@@ -488,11 +482,11 @@
     if (previewControl) previewControl.hidden = true;
 
     const fieldNames = [
-      "resume_id", "samplesheet", "run_name", "af_method", "af3_weights", "prot_mode",
+      "resume_id", "samplesheet", "run_name", "af_method", "af3_weights",
       "full_dbs", "random_seed",
       "colabfold_num_recycles", "colabfold_advanced_options",
       "colabfold_max_msa", "colabfold_num_seeds", "colabfold_use_dropout", "esmfold_num_recycles",
-      "boltz_use_potentials", "save_intermediates", "msa_server"
+      "boltz_use_potentials", "save_intermediates"
     ];
     const controls = Object.fromEntries(
       fieldNames.map((name) => [name, getFieldControl(name)])

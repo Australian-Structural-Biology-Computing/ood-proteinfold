@@ -29,7 +29,6 @@ class TemplateContext
       samplesheet: "/tmp/samplesheet.csv",
       af_method: "colabfold",
       af3_weights: "",
-      prot_mode: "monomer_ptm",
       full_dbs: "reduced",
       colabfold_num_recycles: 3,
       colabfold_advanced_options: "",
@@ -38,8 +37,6 @@ class TemplateContext
       colabfold_use_dropout: "false",
       esmfold_num_recycles: 4,
       boltz_use_potentials: "false",
-      msa_server: "local",
-      proteinfold_version: "release",
       random_seed: "",
       save_intermediates: "false"
     )
@@ -48,7 +45,6 @@ class TemplateContext
   def get_binding
     run_name = "ci_run"
     af_method = "colabfold"
-    msa_server = "local"
     email = "ci@example.com"
     email_on_terminated = false
     context = @context
