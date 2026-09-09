@@ -109,16 +109,16 @@ base_out_dir = (connect.respond_to?(:base_out_dir) && !connect.base_out_dir.blan
 results_url_base = (connect.respond_to?(:results_url_base) && !connect.results_url_base.blank?) ? connect.results_url_base : portal_default_results_url_base
 session_output_dir = (connect.respond_to?(:session_output_dir) && !connect.session_output_dir.blank?) ? connect.session_output_dir : nil
 log_dir = session_output_dir || File.join(base_out_dir, connect.run_dir)
-live_log_path = File.join(log_dir, "live_log.log")
-live_log_url = file_url(results_url_base, live_log_path)
+legacy_live_log_path = File.join(log_dir, "live_log.log")
+legacy_live_log_url = file_url(results_url_base, legacy_live_log_path)
 output_log_path = File.join(log_dir, "output.log")
 output_log_url = file_url(results_url_base, output_log_path)
-summary_log_url = File.file?(output_log_path) ? output_log_url : live_log_url
+summary_log_url = File.file?(output_log_path) ? output_log_url : legacy_live_log_url
 summary_log_label = File.file?(output_log_path) ? "output.log" : "live_log.log"
 log_text = if File.file?(output_log_path)
   sanitise_output_log(tail_text(output_log_path, 16384, 40))
 else
-  sanitise_live_log(tail_text(live_log_path))
+  sanitise_live_log(tail_text(legacy_live_log_path))
 end
 %>
 <div class="ood-completed-log-card">
