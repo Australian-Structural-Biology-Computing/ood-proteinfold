@@ -43,7 +43,8 @@ LAUNCH_DIR="${RUN_STATE_DIR}/launch"
 export NXF_WORK="${RUN_STATE_DIR}/work"
 SAMPLESHEET_STATE="${RUN_STATE_DIR}/samplesheet.path"
 COMPLETED_MARKER="${RUN_STATE_DIR}/.ood-completed"
-TRACE_LOG="${OOD_SESSION_DIR}/debug_commands.log"
+DEBUG_LOG="${OOD_SESSION_DIR}/debug.log"
+OUTPUT_LOG="${OOD_SESSION_DIR}/output.log"
 METRICS_FILE=""
 
 RESUME_RUN=false
@@ -55,8 +56,10 @@ BASE_OUT_DIR=${BASE_OUT_DIR:-"/srv/scratch/${USER}/proteinfold_output"}
 RUN_DIR=$(echo "<%= context.run_name %>" | sed "s#[^A-Za-z0-9]#_#g")
 OUT_DIR="${BASE_OUT_DIR}/${RUN_DIR}"
 
-LIVE_LOG="live_log.log"
-exec > >(tee -a "${LIVE_LOG}")
+# Write user-facing output live. PBS replaces output.log at stage-out with the
+# same stdout/stderr plus its resource-usage footer. debug.log also receives
+# Bash command tracing for internal diagnostics.
+exec > >(tee -a "${OUTPUT_LOG}" "${DEBUG_LOG}")
 exec 2>&1
 
 mkdir -p "${BASE_OUT_DIR}"
@@ -74,7 +77,7 @@ trap "collect_debug_files" ERR
 function collect_debug_files() {
     echo "Error occurred, copying debug files to ${DEBUGDIR}"
     mkdir -p "$DEBUGDIR"
-    cp -f "${TRACE_LOG}" "$DEBUGDIR/" 2>/dev/null || true
+    cp -f "${DEBUG_LOG}" "$DEBUGDIR/" 2>/dev/null || true
     rsync -a --no-perms --no-owner --no-group --max-size=50m . "${NXF_WORK}" "$DEBUGDIR/"
     find "$DEBUGDIR" -type d -exec chmod 2770 {} +
     find "$DEBUGDIR" -type f -exec chmod 660 {} +
@@ -109,7 +112,7 @@ export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR:-/srv/scratch/sbf-pi
 export NXF_SINGULARITY_LIBRARYDIR="${NXF_SINGULARITY_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
 
 mkdir -p "${LAUNCH_DIR}" "${NXF_WORK}"
-exec {TRACE_FD}>>"${TRACE_LOG}"
+exec {TRACE_FD}>>"${DEBUG_LOG}"
 BASH_XTRACEFD="${TRACE_FD}"
 set -x
 cd "${LAUNCH_DIR}"
