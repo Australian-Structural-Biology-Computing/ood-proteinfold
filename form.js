@@ -62,6 +62,10 @@
       .replace(/\s+/g, "-");
   };
 
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { sampleIdForInput };
+  }
+
   const escapeForSelector = (value) => {
     if (window.CSS && typeof window.CSS.escape === "function") {
       return window.CSS.escape(value);
