@@ -44,6 +44,7 @@ export NXF_WORK="${RUN_STATE_DIR}/work"
 SAMPLESHEET_STATE="${RUN_STATE_DIR}/samplesheet.path"
 COMPLETED_MARKER="${RUN_STATE_DIR}/.ood-completed"
 TRACE_LOG="${OOD_SESSION_DIR}/debug_commands.log"
+METRICS_FILE=""
 
 RESUME_RUN=false
 if [ -s "${LAUNCH_DIR}/.nextflow/history" ]; then
@@ -79,6 +80,19 @@ function collect_debug_files() {
     find "$DEBUGDIR" -type f -exec chmod 660 {} +
     chgrp "$DEBUGGROUP" -R "$DEBUGDIR"
 }
+
+function write_completion_metrics() {
+    local exit_status="$1"
+    if [[ -n "${METRICS_FILE}" && -f "${METRICS_FILE}" ]]; then
+        jq --arg finish_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson exit_status "${exit_status}" \
+            '. + {finish_date: $finish_date, exit_status: $exit_status}' \
+            "${METRICS_FILE}" > "${METRICS_FILE}.tmp" && mv "${METRICS_FILE}.tmp" "${METRICS_FILE}" || true
+    fi
+    exit "${exit_status}"
+}
+
+trap 'write_completion_metrics "$?"' EXIT
 
 # Set dependency version numbers
 VERSION_SAMPLESHEET_UTILS="1.3.4"
@@ -433,6 +447,7 @@ fi
 if [[ "${ENABLE_METRICS}" == "true" ]]; then
   # Write metrics before starting the run Create yyyy/mm directory to avoid large file count in one directory and to make collecting metrics by month easier.
   METRICS_LOG_PATH="${METRICS_DIRECTORY}/$(date +%Y/%m)"
+  METRICS_FILE="${METRICS_LOG_PATH}/$(date +%Y-%m-%dT%H:%M:%SZ%z)-$(whoami)-${PBS_JOBID%.*}.json"
 
   # Write json file containing job metrics.
   NF_CONFIG="${NEXTFLOW_CONFIG_ARGS[@]}"
@@ -448,8 +463,9 @@ if [[ "${ENABLE_METRICS}" == "true" ]]; then
       --arg outdir "${OUT_DIR}" \
       --arg nf_config "${NF_CONFIG}" \
       --arg args "${ARGS}" \
-      '{date: $date, user: $user, node: $node, pbs_jobid: $pbs_jobid, mode: $mode, repository: $repository, branch: $branch, input: $input, outdir: $outdir, nf_config: $nf_config, args: $args}' > "${METRICS_LOG_PATH}/$(date +%Y-%m-%dT%H:%M:%SZ%z)-$(whoami)-${PBS_JOBID%.*}.json"; then
+      '{date: $date, user: $user, node: $node, pbs_jobid: $pbs_jobid, mode: $mode, repository: $repository, branch: $branch, input: $input, outdir: $outdir, nf_config: $nf_config, args: $args}' > "${METRICS_FILE}"; then
     echo "Warning: unable to write metrics log to ${METRICS_LOG_PATH}; continuing without metrics." >&2
+    METRICS_FILE=""
   fi
 
 fi

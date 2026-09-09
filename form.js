@@ -283,25 +283,30 @@
       controls.forEach((control) => {
         if (hidden) {
           if (control.required) control.dataset.oodWasRequired = "1";
-          if (control.disabled && control.dataset.oodHiddenDisabled !== "1") {
-            control.dataset.oodWasDisabled = "1";
-          }
           control.required = false;
-          control.disabled = true;
-          control.dataset.oodHiddenDisabled = "1";
+
+          if (fieldName !== "af3_weights") {
+            if (control.disabled && control.dataset.oodHiddenDisabled !== "1") {
+              control.dataset.oodWasDisabled = "1";
+            }
+            control.disabled = true;
+            control.dataset.oodHiddenDisabled = "1";
+          }
         } else {
           if (control.dataset.oodWasRequired === "1") {
             control.required = true;
             delete control.dataset.oodWasRequired;
           }
 
-          if (control.dataset.oodWasDisabled === "1") {
-            delete control.dataset.oodWasDisabled;
-          } else {
-            control.disabled = false;
-          }
+          if (fieldName !== "af3_weights") {
+            if (control.dataset.oodWasDisabled === "1") {
+              delete control.dataset.oodWasDisabled;
+            } else {
+              control.disabled = false;
+            }
 
-          delete control.dataset.oodHiddenDisabled;
+            delete control.dataset.oodHiddenDisabled;
+          }
         }
       });
     });
@@ -367,6 +372,17 @@
     evaluate();
   };
 
+  const initResumeId = () => {
+    const resumeId = getFieldControl("resume_id");
+    if (!resumeId || resumeId.dataset.oodResumeIdBound || new URLSearchParams(window.location.search).has("session_id")) return;
+
+    const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+    const suffix = window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
+    resumeId.value = `${timestamp.slice(0, 8)}_${timestamp.slice(8)}_${suffix}`;
+    resumeId.dataset.oodResumeIdBound = "1";
+  };
+
+  onPageLoad(initResumeId);
   onPageLoad(initDynamicHide);
 
   const initMethodTokenLimitPanel = () => {
