@@ -51,6 +51,77 @@
     return normalised === "" || normalised === "true" || normalised === "1" || normalised === "yes" || normalised === "on";
   };
 
+  const methodPreviewArguments = (values) => {
+    const method = values.af_method || "alphafold2";
+    const mode = values.prot_mode || "monomer_ptm";
+    const database = "/srv/scratch/sbf-pipelines/proteinfold/dbs";
+    const args = ["--mode", method];
+    const add = (name, value) => {
+      if (value !== "" && value !== null && value !== undefined) args.push(name, String(value));
+    };
+
+    if (method === "alphafold2") {
+      add("--alphafold2_db", database);
+      add("--alphafold2_full_dbs", values.full_dbs === "full");
+      add("--alphafold2_mode", "split_msa_prediction");
+      add("--random_seed", values.random_seed);
+      if (values.proteinfold_version === "release") add("--alphafold2_model_preset", mode);
+    } else if (method === "boltz") {
+      add("--boltz_db", database);
+      add("--colabfold_db", database);
+      add("--use_msa_server", values.msa_server !== "local");
+      add("--random_seed", values.random_seed);
+      if (parseTruthy(values.boltz_use_potentials)) add("--boltz_use_potentials", true);
+    } else if (method === "alphafold3") {
+      add("--alphafold3_db", database);
+      add("--alphafold3_params_path", values.af3_weights);
+    } else if (method === "colabfold") {
+      add("--colabfold_db", database);
+      add("--use_msa_server", values.msa_server !== "local");
+      add("--colabfold_model_preset", mode);
+      add("--colabfold_num_recycles", values.colabfold_num_recycles);
+    } else if (method === "esmfold") {
+      add("--esmfold_db", database);
+      add("--esmfold_model_preset", mode);
+      add("--esmfold_num_recycles", values.esmfold_num_recycles);
+    }
+    if (parseTruthy(values.save_intermediates) ||
+        (method === "colabfold" && parseTruthy(values.colabfold_advanced_options))) {
+      add("--save_intermediates", true);
+    }
+    return args;
+  };
+
+  const commandPreviewArguments = (values) => {
+    const projectRoot = "/srv/scratch/sbf-pipelines/proteinfold";
+    const isDevelopment = values.proteinfold_version === "dev";
+    const repository = isDevelopment
+      ? "Australian-Structural-Biology-Computing/proteinfold"
+      : "nf-core/proteinfold";
+    const branch = isDevelopment ? "master" : "2.0.0";
+    const user = values.user || "${USER}";
+    const runDirectory = (values.run_name || "<run-name>").replace(/[^A-Za-z0-9]/g, "_");
+    return [
+      "nextflow", "-c", `${projectRoot}/kod_proteinfold-prod.config`,
+      "run", repository, "-r", branch, "-latest",
+      "--input", values.samplesheet || "<input>",
+      "--outdir", `/srv/scratch/${user}/proteinfold_output/${runDirectory}`,
+      ...methodPreviewArguments(values),
+      "--use_gpu", "--monochrome_logs", "-profile", "apptainer"
+    ];
+  };
+
+  const formatShellArgument = (argument) => {
+    const value = String(argument).replace(/\\_/g, "_");
+    if (/^\$\{[A-Z_]+\}$/.test(value)) return `"${value}"`;
+    if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) return value;
+    return `'${value.replace(/'/g, "'\\''")}'`;
+  };
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { commandPreviewArguments, formatShellArgument, methodPreviewArguments };
+  }
+
   const hasHideAttribute = (element) =>
     Array.from(element.attributes).some((attribute) => attribute.name.startsWith("data-hide-"));
 
@@ -431,6 +502,37 @@
   document.addEventListener("DOMContentLoaded", initColabfoldAdvancedEnforce);
   document.addEventListener("turbo:load", initColabfoldAdvancedEnforce);
   document.addEventListener("page:load", initColabfoldAdvancedEnforce);
+
+  const initCommandPreview = () => {
+    const preview = document.getElementById("ood-proteinfold-command-preview");
+    if (!preview || preview.dataset.oodCommandPreviewBound === "1") return;
+    preview.dataset.oodCommandPreviewBound = "1";
+
+    const fieldNames = [
+      "resume_id", "proteinfold_version", "samplesheet", "run_name", "af_method", "af3_weights",
+      "prot_mode", "full_dbs", "random_seed", "colabfold_num_recycles",
+      "colabfold_advanced_options", "esmfold_num_recycles", "boltz_use_potentials",
+      "save_intermediates", "msa_server"
+    ];
+    const controls = Object.fromEntries(fieldNames.map((name) => [name, getFieldControl(name)]));
+    const render = () => {
+      const values = Object.fromEntries(Object.entries(controls).map(([name, element]) => [
+        name,
+        element?.matches("input[type='checkbox']") ? element.checked : (element?.value || "")
+      ]));
+      values.user = values.resume_id.split("_").slice(2).join("_") || "${USER}";
+      preview.textContent = commandPreviewArguments(values).map(formatShellArgument).join(" ");
+    };
+    Object.values(controls).forEach((element) => {
+      element?.addEventListener("input", render);
+      element?.addEventListener("change", render);
+    });
+    render();
+  };
+
+  document.addEventListener("DOMContentLoaded", initCommandPreview);
+  document.addEventListener("turbo:load", initCommandPreview);
+  document.addEventListener("page:load", initCommandPreview);
 
   const initInputPreflight = () => {
     const input = getFieldControl("samplesheet");
