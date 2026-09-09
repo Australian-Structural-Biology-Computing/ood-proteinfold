@@ -36,5 +36,5 @@ jobs:
       - name: Test input sanitisation
         run: python -m unittest discover -s tests -v
 
-      - name: Test form argument mapping
+      - name: Test form helpers
         run: node tests/test_form.js

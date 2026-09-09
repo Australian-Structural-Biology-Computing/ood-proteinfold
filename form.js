@@ -62,71 +62,8 @@
       .replace(/\s+/g, "-");
   };
 
-  const methodPreviewArguments = (values) => {
-    const method = values.af_method || "alphafold2";
-    const args = ["--mode", method];
-    const add = (name, value) => {
-      if (value !== "" && value !== null && value !== undefined) args.push(name, String(value));
-    };
-
-    if (method === "alphafold2") {
-      add("--full_dbs", values.full_dbs === "full");
-      add("--random_seed", values.random_seed);
-    } else if (method === "boltz") {
-      add("--random_seed", values.random_seed);
-      if (parseTruthy(values.boltz_use_potentials)) add("--boltz_use_potentials", true);
-    } else if (method === "alphafold3") {
-      add("--alphafold3_params_path", values.af3_weights);
-    } else if (method === "colabfold") {
-      add("--random_seed", values.random_seed);
-      add("--colabfold_num_recycles", values.colabfold_num_recycles);
-    } else if (method === "esmfold") {
-      add("--esmfold_num_recycles", values.esmfold_num_recycles);
-    }
-    if (parseTruthy(values.save_intermediates) ||
-        (method === "colabfold" && parseTruthy(values.colabfold_advanced_options))) {
-      add("--save_intermediates", true);
-    }
-    return args;
-  };
-
-  const commandPreviewArguments = (values) => {
-    const projectRoot = "/srv/scratch/sbf-pipelines/proteinfold";
-    const user = values.user || "${USER}";
-    const runDirectory = (values.run_name || "<run-name>").replace(/[^A-Za-z0-9]/g, "_");
-    const command = [
-      "nextflow",
-      "-c", `${projectRoot}/kod_proteinfold-dev.config`,
-      "run", "Australian-Structural-Biology-Computing/proteinfold",
-      "-r", "master",
-      "-latest",
-      "--input", values.samplesheet || "<input>",
-      "--outdir", `/srv/scratch/${user}/proteinfold_output/${runDirectory}`,
-      "--db", `${projectRoot}/proteinfold_microdbs`
-    ];
-    command.push(
-      ...methodPreviewArguments(values),
-      "--use_gpu",
-      "--monochrome_logs",
-      "-profile", "apptainer"
-    );
-    return command;
-  };
-
-  const formatShellArgument = (argument) => {
-    const value = String(argument).replace(/\\_/g, "_");
-    if (/^\$\{[A-Z_]+\}$/.test(value)) return `"${value}"`;
-    if (/^[A-Za-z0-9_./:@%+=,-]+$/.test(value)) return value;
-    return `'${value.replace(/'/g, "'\\''")}'`;
-  };
-
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = {
-      commandPreviewArguments,
-      formatShellArgument,
-      methodPreviewArguments,
-      sampleIdForInput
-    };
+    module.exports = { sampleIdForInput };
   }
 
   const escapeForSelector = (value) => {
@@ -488,43 +425,6 @@
   };
 
   onPageLoad(initColabfoldAdvancedEnforce);
-
-  const initCommandPreview = () => {
-    const preview = document.getElementById("ood-proteinfold-command-preview");
-    if (!preview || preview.dataset.oodCommandPreviewBound === "1") return;
-    preview.dataset.oodCommandPreviewBound = "1";
-
-    const previewControl = getFieldControl("command_preview");
-    if (previewControl) previewControl.hidden = true;
-
-    const fieldNames = [
-      "resume_id", "ood_user", "samplesheet", "run_name", "af_method", "af3_weights",
-      "full_dbs", "random_seed",
-      "colabfold_num_recycles", "colabfold_advanced_options",
-      "colabfold_max_msa", "colabfold_num_seeds", "colabfold_use_dropout", "esmfold_num_recycles",
-      "boltz_use_potentials", "save_intermediates"
-    ];
-    const controls = Object.fromEntries(
-      fieldNames.map((name) => [name, getFieldControl(name)])
-    );
-    const render = () => {
-      const values = Object.fromEntries(Object.entries(controls).map(([name, element]) => [
-        name,
-        element?.matches("input[type='checkbox']") ? element.checked : (element?.value || "")
-      ]));
-      values.user = values.ood_user || "${USER}";
-      preview.textContent = commandPreviewArguments(values)
-        .map(formatShellArgument)
-        .join(" ");
-    };
-    Object.values(controls).forEach((element) => {
-      element?.addEventListener("input", render);
-      element?.addEventListener("change", render);
-    });
-    render();
-  };
-
-  onPageLoad(initCommandPreview);
 
   const initInputPreflight = () => {
     const input = getFieldControl("samplesheet");
