@@ -1,5 +1,6 @@
 form:
     - resume_id
+    - ood_user
     - data_warning
     - samplesheet
     - samplesheet_help
@@ -28,6 +29,11 @@ attributes:
         widget: "hidden_field"
         cacheable: true
         value: ""
+
+    ood_user:
+        widget: "hidden_field"
+        cacheable: false
+        value: "<%= ENV["USER"] %>"
 
     data_warning:
         class: "d-none"
