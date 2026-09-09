@@ -498,7 +498,7 @@
     if (previewControl) previewControl.hidden = true;
 
     const fieldNames = [
-      "resume_id", "samplesheet", "run_name", "af_method", "af3_weights",
+      "resume_id", "ood_user", "samplesheet", "run_name", "af_method", "af3_weights",
       "full_dbs", "random_seed",
       "colabfold_num_recycles", "colabfold_advanced_options",
       "colabfold_max_msa", "colabfold_num_seeds", "colabfold_use_dropout", "esmfold_num_recycles",
@@ -512,7 +512,7 @@
         name,
         element?.matches("input[type='checkbox']") ? element.checked : (element?.value || "")
       ]));
-      values.user = values.resume_id.split("_").slice(2).join("_") || "${USER}";
+      values.user = values.ood_user || "${USER}";
       preview.textContent = commandPreviewArguments(values)
         .map(formatShellArgument)
         .join(" ");
@@ -533,7 +533,7 @@
 
     const methodControl = getFieldControl("af_method", "select");
     const runNameControl = getFieldControl("run_name");
-    const resumeIdControl = getFieldControl("resume_id");
+    const userControl = getFieldControl("ood_user");
     const fieldContainer = getFieldContainer(input);
     const fileKinds = [
       [/\.fa(?:sta)?$/i, "fasta"],
@@ -1293,7 +1293,7 @@
     const checkOutputs = async (controller) => {
       const ids = candidateIds();
       const runName = runNameControl?.value.trim();
-      const user = (resumeIdControl?.value || "").split("_").slice(2).join("_");
+      const user = userControl?.value || "";
       if (!runName || !ids.length || !methodControl?.value || !user) {
         renderOutputCheck("waiting", "Enter a run name and valid input to check existing outputs.");
         return;
