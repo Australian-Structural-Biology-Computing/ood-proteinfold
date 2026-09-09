@@ -26,8 +26,8 @@ cluster: "katana"
 attributes:
     resume_id:
         widget: "hidden_field"
-        cacheable: false
-        value: "<%= Time.now.strftime('%Y%m%d_%H%M%S') %>_<%= ENV.fetch('USER', 'unknown') %>"
+        cacheable: true
+        value: ""
 
     data_warning:
         class: "d-none"
