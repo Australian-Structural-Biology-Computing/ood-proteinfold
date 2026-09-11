@@ -28,11 +28,13 @@ set -eE
 # Open OnDemand preserves this identifier when its Relaunch action creates a
 # new batch session. This lets Nextflow reuse state without tying it to a run
 # name, which users may legitimately reuse.
-RUNNAME="<%= context.resume_id %>"
-if [[ ! "${RUNNAME}" =~ ^[0-9]{8}_[0-9]{6}_[A-Za-z0-9._-]+$ ]]; then
-    echo "ERROR: Invalid ProteinFold resume identifier: ${RUNNAME}" >&2
+RESUME_ID="<%= context.resume_id %>"
+if [[ ! "${RESUME_ID}" =~ ^[0-9]{8}_[0-9]{6}_[A-Za-z0-9._-]+$ ]]; then
+    echo "ERROR: Invalid ProteinFold resume identifier: ${RESUME_ID}" >&2
     exit 1
 fi
+RUN_METHOD="<%= context.af_method.to_s.gsub(/[^A-Za-z0-9._-]/, "_") %>"
+RUNNAME="${RESUME_ID}_${RUN_METHOD}"
 
 BASE_DEBUGDIR=${BASE_DEBUGDIR:-"/srv/scratch/sbf/debug"}
 DEBUGDIR="${BASE_DEBUGDIR}/${RUNNAME}"

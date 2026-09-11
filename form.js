@@ -314,8 +314,8 @@
     if (!resumeId || resumeId.dataset.oodResumeIdBound || new URLSearchParams(window.location.search).has("session_id")) return;
 
     const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
-    const suffix = window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
-    resumeId.value = `${timestamp.slice(0, 8)}_${timestamp.slice(8)}_${suffix}`;
+    const user = getFieldControl("ood_user")?.value || "unknown";
+    resumeId.value = `${timestamp.slice(0, 8)}_${timestamp.slice(8)}_${user}`;
     resumeId.dataset.oodResumeIdBound = "1";
   };
 
