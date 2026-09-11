@@ -82,8 +82,15 @@ BASE_NXF_WORK=/srv/scratch/${USER}/.proteinfold/work
 Run names may be reused when the selected method or input IDs differ. The form
 checks the selected combination, and the job verifies the prepared samplesheet
 before Nextflow starts, to avoid overwriting matching method-and-input results.
-After Nextflow completes successfully, a marker in the persistent run state
-prevents later relaunches from submitting the completed workflow again.
+
+If a run is interrupted, use **Relaunch** from its Open OnDemand job card. This
+reuses the saved samplesheet and Nextflow state and starts Nextflow with
+`-resume`. Relaunch is available only while the original job card remains in
+Open OnDemand, so retry the run before the card expires. Do not start a new job
+with the same options to resume it: a new submission has different Nextflow
+state and is checked as a new run. After Nextflow completes successfully, a
+marker in the persistent run state prevents the job card from submitting the
+completed workflow again.
 
 ### Python Environment for samplesheet-utils
 
