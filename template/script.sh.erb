@@ -334,11 +334,6 @@ fi
 
 if [ "${RESUME_RUN}" == "false" ]; then
     printf '%s\n' "${SAMPLESHEET}" > "${SAMPLESHEET_STATE}"
-    if ! python3 "${OOD_SESSION_DIR}/sanitise_input.py" output-collisions \
-        "${SAMPLESHEET}" "${OUT_DIR}" "${af_method}"; then
-        echo "Use a different run name, method, or input ID to preserve the existing results." >&2
-        exit 1
-    fi
 fi
 
 if [ -f "$(pwd)/WARNING.txt" ]; then

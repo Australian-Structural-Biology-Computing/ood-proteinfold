@@ -35,6 +35,3 @@ jobs:
 
       - name: Test input sanitisation
         run: python -m unittest discover -s tests -v
-
-      - name: Test form collision helpers
-        run: node tests/test_form_collision_helpers.js

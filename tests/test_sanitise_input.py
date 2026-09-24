@@ -390,58 +390,5 @@ class NormaliseSamplesheetIdsTests(unittest.TestCase):
             self.assertIn("protein -> protein-2", warning_path.read_text())
 
 
-class OutputCollisionTests(unittest.TestCase):
-    def write_samplesheet(self, directory, *sample_ids):
-        samplesheet = directory / "samplesheet.csv"
-        samplesheet.write_text(
-            "id,fasta\n" + "".join(f"{sample_id},{sample_id}.fasta\n" for sample_id in sample_ids)
-        )
-        return samplesheet
-
-    def test_rejects_matching_outputs_for_selected_method(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            directory = Path(temporary_directory)
-            method_directory = directory / "alphafold2"
-            method_directory.mkdir()
-            (method_directory / "sample_scores.json").touch()
-            samplesheet = self.write_samplesheet(directory, "sample", "clear")
-
-            with self.assertRaisesRegex(
-                SANITISE_INPUT.InputValidationError,
-                r"alphafold2.*sample",
-            ):
-                SANITISE_INPUT.check_output_collisions(
-                    samplesheet, directory, "alphafold2"
-                )
-
-    def test_checks_alphafold2_split_prediction_directory(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            directory = Path(temporary_directory)
-            prediction_directory = directory / "alphafold2" / "split_msa_prediction"
-            prediction_directory.mkdir(parents=True)
-            (prediction_directory / "sample").mkdir()
-            samplesheet = self.write_samplesheet(directory, "sample")
-
-            with self.assertRaises(SANITISE_INPUT.InputValidationError):
-                SANITISE_INPUT.check_output_collisions(
-                    samplesheet, directory, "alphafold2"
-                )
-
-    def test_ignores_other_methods_nested_files_and_partial_ids(self):
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            directory = Path(temporary_directory)
-            method_directory = directory / "boltz"
-            nested_directory = method_directory / "unrelated"
-            nested_directory.mkdir(parents=True)
-            (nested_directory / "sample_model.cif").touch()
-            other_method = directory / "alphafold2"
-            other_method.mkdir()
-            (other_method / "sample_model.pdb").touch()
-            (method_directory / "sample2_model.cif").touch()
-            samplesheet = self.write_samplesheet(directory, "sample")
-
-            SANITISE_INPUT.check_output_collisions(samplesheet, directory, "boltz")
-
-
 if __name__ == "__main__":
     unittest.main()
