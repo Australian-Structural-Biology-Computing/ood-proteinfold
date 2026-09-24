@@ -79,6 +79,10 @@ BASE_NXF_WORK=/srv/scratch/${USER}/.proteinfold/work
 # NXF_SINGULARITY_LIBRARYDIR=/srv/scratch/sbf-pipelines/proteinfold/singularity
 ```
 
+Run names may be reused when the selected method or input IDs differ. The form
+checks the selected combination, and the job verifies the prepared samplesheet
+before Nextflow starts, to avoid overwriting matching method-and-input results.
+
 If a run is interrupted, use **Relaunch** from its Open OnDemand job card. This
 reuses the saved samplesheet and Nextflow state and starts Nextflow with
 `-resume`. Relaunch is available only while the original job card remains in
