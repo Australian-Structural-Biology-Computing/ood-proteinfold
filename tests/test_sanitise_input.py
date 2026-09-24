@@ -401,17 +401,17 @@ class OutputCollisionTests(unittest.TestCase):
     def test_rejects_matching_outputs_for_selected_method(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)
-            method_directory = directory / "alphafold2"
+            method_directory = directory / "colabfold"
             method_directory.mkdir()
-            (method_directory / "sample_scores.json").touch()
+            (method_directory / "sample").mkdir()
             samplesheet = self.write_samplesheet(directory, "sample", "clear")
 
             with self.assertRaisesRegex(
                 SANITISE_INPUT.InputValidationError,
-                r"alphafold2.*sample",
+                r"colabfold.*sample",
             ):
                 SANITISE_INPUT.check_output_collisions(
-                    samplesheet, directory, "alphafold2"
+                    samplesheet, directory, "colabfold"
                 )
 
     def test_checks_alphafold2_split_prediction_directory(self):
@@ -427,17 +427,28 @@ class OutputCollisionTests(unittest.TestCase):
                     samplesheet, directory, "alphafold2"
                 )
 
-    def test_ignores_other_methods_nested_files_and_partial_ids(self):
+    def test_checks_exact_top_ranked_structure(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            structures_directory = directory / "boltz" / "top_ranked_structures"
+            structures_directory.mkdir(parents=True)
+            (structures_directory / "sample.cif").touch()
+            samplesheet = self.write_samplesheet(directory, "sample")
+
+            with self.assertRaises(SANITISE_INPUT.InputValidationError):
+                SANITISE_INPUT.check_output_collisions(
+                    samplesheet, directory, "boltz"
+                )
+
+    def test_ignores_other_methods_and_partial_ids(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)
             method_directory = directory / "boltz"
-            nested_directory = method_directory / "unrelated"
-            nested_directory.mkdir(parents=True)
-            (nested_directory / "sample_model.cif").touch()
-            other_method = directory / "alphafold2"
+            method_directory.mkdir()
+            (method_directory / "sample2").mkdir()
+            other_method = directory / "alphafold3"
             other_method.mkdir()
-            (other_method / "sample_model.pdb").touch()
-            (method_directory / "sample2_model.cif").touch()
+            (other_method / "sample").mkdir()
             samplesheet = self.write_samplesheet(directory, "sample")
 
             SANITISE_INPUT.check_output_collisions(samplesheet, directory, "boltz")

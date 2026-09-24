@@ -1,6 +1,7 @@
 form:
     - resume_id
     - ood_user
+    - output_root
     - data_warning
     - samplesheet
     - samplesheet_help
@@ -33,6 +34,11 @@ attributes:
         widget: "hidden_field"
         cacheable: false
         value: "<%= ENV["USER"] %>"
+
+    output_root:
+        widget: "hidden_field"
+        cacheable: false
+        value: "<%= (ENV["BASE_OUT_DIR"] || "/srv/scratch/${USER}/proteinfold_output").gsub("${USER}", ENV["USER"].to_s).gsub("$USER", ENV["USER"].to_s) %>"
 
     data_warning:
         class: "d-none"

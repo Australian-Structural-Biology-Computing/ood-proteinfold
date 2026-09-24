@@ -661,7 +661,19 @@ def sanitise_directory(directory, warning_path, af_method=None):
 
 def check_output_collisions(samplesheet_path, output_directory, af_method):
     """Refuse only sample IDs that already have outputs for the selected method."""
-    method_directory = os.path.join(output_directory, af_method)
+    layouts = {
+        "alphafold2": ("alphafold2/split_msa_prediction", ".pdb"),
+        "alphafold3": ("alphafold3", ".cif"),
+        "boltz": ("boltz", ".cif"),
+        "colabfold": ("colabfold", ".pdb"),
+        "esmfold": ("esmfold", ".pdb"),
+    }
+    if af_method not in layouts:
+        raise InputValidationError(f"Unknown prediction method for output checking: {af_method}")
+
+    sample_path, structure_extension = layouts[af_method]
+    sample_directory = os.path.join(output_directory, sample_path)
+    structures_directory = os.path.join(sample_directory, "top_ranked_structures")
 
     with open(samplesheet_path, encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -675,23 +687,14 @@ def check_output_collisions(samplesheet_path, output_directory, af_method):
             (row.get(id_column) or "").strip() for row in reader
         } - {""}
 
-    output_directories = [method_directory]
-    if af_method == "alphafold2":
-        output_directories.append(os.path.join(method_directory, "split_msa_prediction"))
-    names = {
-        name
-        for directory in output_directories
-        if os.path.isdir(directory)
-        for name in os.listdir(directory)
-    }
     collisions = {
         sample_id
         for sample_id in sample_ids
-        if any(
-            name == sample_id
-            or name.startswith(f"{sample_id}_")
-            or name.startswith(f"{sample_id}.")
-            for name in names
+        if os.path.lexists(os.path.join(sample_directory, sample_id))
+        or os.path.lexists(
+            os.path.join(
+                structures_directory, f"{sample_id}{structure_extension}"
+            )
         )
     }
 

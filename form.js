@@ -6,6 +6,17 @@
     "colabfold_max_msa"
   ];
   const HEADERLESS_SEQUENCE_ID_LENGTH = 6;
+  const SAMPLESHEET_ID_DISALLOWED_PATTERN = /[|\[\], <>."';:()]/g;
+  const OUTPUT_LAYOUTS = {
+    alphafold2: {
+      samplePath: "alphafold2/split_msa_prediction",
+      structureExtension: "pdb"
+    },
+    alphafold3: { samplePath: "alphafold3", structureExtension: "cif" },
+    boltz: { samplePath: "boltz", structureExtension: "cif" },
+    colabfold: { samplePath: "colabfold", structureExtension: "pdb" },
+    esmfold: { samplePath: "esmfold", structureExtension: "pdb" }
+  };
   const AMINO_ACID_SEQUENCE_PATTERN = /^[ACDEFGHIKLMNPQRSTVWYX]+$/;
   const ENTITY_TYPES = new Set(["protein", "ccd", "smiles", "dna", "rna"]);
   const NON_PROTEIN_METHODS = new Set(["alphafold3", "boltz"]);
@@ -55,15 +66,48 @@
     if (file.manualSequence) {
       return file.manualSequence.slice(0, HEADERLESS_SEQUENCE_ID_LENGTH);
     }
-    return file.label
+    const filenameStem = file.label
       .replace(/ \(samplesheet row \d+\)$/, "")
       .replace(/\.(?:fa|fasta|ya?ml)$/i, "")
-      .trim()
-      .replace(/\s+/g, "-");
+      .trim();
+    const stagedStem = file.collectionInput
+      ? filenameStem.replace(/\s/g, "-")
+      : filenameStem;
+    return stagedStem.replace(SAMPLESHEET_ID_DISALLOWED_PATTERN, "_");
+  };
+
+  const uniqueSampleIds = (files) => {
+    const usedIds = new Set();
+    return files.map((file) => {
+      const sampleId = sampleIdForInput(file);
+      let uniqueId = sampleId;
+      let suffix = 2;
+      while (usedIds.has(uniqueId)) {
+        uniqueId = `${sampleId}-${suffix}`;
+        suffix += 1;
+      }
+      usedIds.add(uniqueId);
+      return uniqueId;
+    });
+  };
+
+  const outputLocations = (outputRoot, runName, method, sampleIds) => {
+    const layout = OUTPUT_LAYOUTS[method];
+    if (!layout) return [];
+    const runDirectory = runName.replace(/[^A-Za-z0-9]/g, "_");
+    const sampleDirectory = `${outputRoot.replace(/\/+$/, "")}/${runDirectory}/${layout.samplePath}`;
+    const structuresDirectory = `${sampleDirectory}/top_ranked_structures`;
+    return sampleIds.map((sampleId) => ({
+      sampleId,
+      sampleDirectory,
+      sampleEntry: sampleId,
+      structuresDirectory,
+      structureEntry: `${sampleId}.${layout.structureExtension}`
+    }));
   };
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { sampleIdForInput };
+    module.exports = { outputLocations, sampleIdForInput, uniqueSampleIds };
   }
 
   const escapeForSelector = (value) => {
@@ -433,7 +477,7 @@
 
     const methodControl = getFieldControl("af_method", "select");
     const runNameControl = getFieldControl("run_name");
-    const userControl = getFieldControl("ood_user");
+    const outputRootControl = getFieldControl("output_root");
     const fieldContainer = getFieldContainer(input);
     const fileKinds = [
       [/\.fa(?:sta)?$/i, "fasta"],
@@ -1171,44 +1215,55 @@
 
     const candidateIds = () => {
       if (!lastCheckedFiles) return [];
-      return [...new Set(lastCheckedFiles
-        .filter((file) => !file.error && !file.ignoredForMethod)
-        .map(sampleIdForInput)
-        .filter(Boolean))];
+      const seenSequences = new Set();
+      const runnableFiles = lastCheckedFiles.filter((file) => {
+        if (file.error || file.ignoredForMethod) return false;
+        if (methodControl?.value === "alphafold2" && file.hasUnknownProteinResidue) return false;
+        if (unsupportedEntityTypes(file).length) return false;
+        if (file.sequenceKey && seenSequences.has(file.sequenceKey)) return false;
+        if (file.sequenceKey) seenSequences.add(file.sequenceKey);
+        return true;
+      });
+      return uniqueSampleIds(runnableFiles).filter(Boolean);
     };
     const listOutputNames = async (paths, signal) => {
-      const listings = await Promise.all(paths.map(async (path) => {
+      const listings = await Promise.all([...new Set(paths)].map(async (path) => {
         const response = await fetch(buildFilesUrl(path), {
           credentials: "same-origin",
           headers: { Accept: "application/json" },
           signal
         });
-        if (response.status === 404) return [];
+        if (response.status === 404) return [path, new Set()];
         if (!response.ok) throw new Error(`Could not inspect existing outputs (${response.status}).`);
         const listing = await response.json();
-        return (listing.files || []).map((entry) => entry.name);
+        return [path, new Set((listing.files || []).map((entry) => entry.name))];
       }));
-      return listings.flat();
+      return new Map(listings);
     };
     const checkOutputs = async (controller) => {
       const ids = candidateIds();
       const runName = runNameControl?.value.trim();
-      const user = userControl?.value || "";
-      if (!runName || !ids.length || !methodControl?.value || !user) {
+      const outputRoot = outputRootControl?.value.trim();
+      if (!runName || !ids.length || !methodControl?.value || !outputRoot) {
         renderOutputCheck("waiting", "Enter a run name and valid input to check existing outputs.");
         return;
       }
       renderOutputCheck("checking", "Checking for existing outputs...");
-      const runDirectory = runName.replace(/[^A-Za-z0-9]/g, "_");
       try {
-        const methodPath = `/srv/scratch/${user}/proteinfold_output/${runDirectory}/${methodControl.value}`;
-        const outputPaths = methodControl.value === "alphafold2"
-          ? [methodPath, `${methodPath}/split_msa_prediction`]
-          : [methodPath];
-        const names = await listOutputNames(outputPaths, controller.signal);
-        const collisions = ids.filter((id) => names.some((name) =>
-          name === id || name.startsWith(`${id}_`) || name.startsWith(`${id}.`)
-        ));
+        const locations = outputLocations(outputRoot, runName, methodControl.value, ids);
+        const namesByDirectory = await listOutputNames(
+          locations.flatMap(({ sampleDirectory, structuresDirectory }) => [
+            sampleDirectory,
+            structuresDirectory
+          ]),
+          controller.signal
+        );
+        const collisions = locations
+          .filter(({ sampleDirectory, sampleEntry, structuresDirectory, structureEntry }) =>
+            namesByDirectory.get(sampleDirectory)?.has(sampleEntry) ||
+            namesByDirectory.get(structuresDirectory)?.has(structureEntry)
+          )
+          .map(({ sampleId }) => sampleId);
         if (collisions.length) {
           renderOutputCheck(
             "collision",
