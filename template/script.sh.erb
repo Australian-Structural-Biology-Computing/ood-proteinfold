@@ -483,6 +483,8 @@ if [ "${RESUME_RUN}" == "true" ]; then
     NEXTFLOW_RESUME_ARGS+=("-resume")
 fi
 
+echo "Proteinfold version: ${REVISION}"
+
 nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run "${PROJECT}" "${NEXTFLOW_REVISION_ARGS[@]}" \
     --input "${SAMPLESHEET}" \
     --outdir "${OUT_DIR}" \
