@@ -1,6 +1,7 @@
 form:
     - resume_id
     - ood_user
+    - output_root
     - data_warning
     - samplesheet
     - samplesheet_help
@@ -34,6 +35,11 @@ attributes:
         cacheable: false
         value: "<%= ENV["USER"] %>"
 
+    output_root:
+        widget: "hidden_field"
+        cacheable: false
+        value: "<%= (ENV["BASE_OUT_DIR"] || "/srv/scratch/${USER}/proteinfold_output").gsub("${USER}", ENV["USER"].to_s).gsub("$USER", ENV["USER"].to_s) %>"
+
     data_warning:
         class: "d-none"
         help: |
@@ -62,7 +68,8 @@ attributes:
         pattern: '^[A-Za-z0-9_\- ]+$'
         required: true
         help: |
-            <a>Alphanumeric characters, spaces, "_", and "-" only.</a>
+            Results can share a run name when their method or input IDs differ.
+            <br><a>Alphanumeric characters, spaces, "_", and "-" only.</a>
 
     af_method:
         widget: "select"
