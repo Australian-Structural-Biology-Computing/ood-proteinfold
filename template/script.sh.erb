@@ -11,15 +11,14 @@ OOD_SESSION_DIR=$(pwd -P)
 RUN_ENVIRONMENT=${RUN_ENVIRONMENT:-prod}
 PROJECT_ROOT=${PROJECT_ROOT:-/srv/scratch/sbf-pipelines/proteinfold}
 DB_PATH=${DB_PATH:-/srv/scratch/sbf-pipelines/proteinfold/dbs}
-BRANCH="master"
-REPOSITORY="Australian-Structural-Biology-Computing/proteinfold"
+PROJECT="${PROJECT:-${PROJECT_ROOT}/releases/current}"
+REVISION="${REVISION-}"
 DEBUGGROUP=${DEBUGGROUP:-sbf}
 METRICS_DIRECTORY=${METRICS_DIRECTORY:-/srv/scratch/sbf-pipelines/metrics}
 ENABLE_METRICS=${ENABLE_METRICS:-true}
 
 PROTEINFOLD_VERSION="2.1.0dev"
 
-export BRANCH
 export PROTEINFOLD_VERSION
 
 set -o pipefail
@@ -110,10 +109,19 @@ export SINGULARITY_CACHEDIR="${SINGULARITY_CACHEDIR:-/srv/scratch/${USER}/.image
 # Nextflow variables, checks libraryDir and if image is not found downloads to cache
 export NXF_APPTAINER_CACHEDIR="${NXF_APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
 export NXF_SINGULARITY_CACHEDIR="${NXF_SINGULARITY_CACHEDIR:-/srv/scratch/${USER}/.images}"
-export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
-export NXF_SINGULARITY_LIBRARYDIR="${NXF_SINGULARITY_LIBRARYDIR:-/srv/scratch/sbf-pipelines/proteinfold/singularity}"
+export NXF_APPTAINER_LIBRARYDIR="${NXF_APPTAINER_LIBRARYDIR:-/srv/scratch/sbf-pipelines/containers}"
+export NXF_SINGULARITY_LIBRARYDIR="${NXF_SINGULARITY_LIBRARYDIR:-/srv/scratch/sbf-pipelines/containers}"
 
 mkdir -p "${LAUNCH_DIR}" "${NXF_WORK}"
+
+NEXTFLOW_REVISION_ARGS=()
+if [[ -d "${PROJECT}" ]]; then
+    PROJECT=$(realpath "${PROJECT}")
+    REVISION=$(git -C "${PROJECT}" rev-parse HEAD 2>/dev/null || basename "${PROJECT}")
+elif [[ -n "${REVISION}" ]]; then
+    NEXTFLOW_REVISION_ARGS=("-r" "${REVISION}")
+fi
+
 exec {TRACE_FD}>>"${DEBUG_LOG}"
 BASH_XTRACEFD="${TRACE_FD}"
 set -x
@@ -457,13 +465,13 @@ if [[ "${ENABLE_METRICS}" == "true" ]]; then
       --arg node "$(hostname)" \
       --arg pbs_jobid "${PBS_JOBID}" \
       --arg mode "${PIPELINE_MODE}" \
-      --arg repository "${REPOSITORY}" \
-      --arg branch "${BRANCH}" \
+      --arg project "${PROJECT}" \
+      --arg revision "${REVISION}" \
       --arg input "${SAMPLESHEET}" \
       --arg outdir "${OUT_DIR}" \
       --arg nf_config "${NF_CONFIG}" \
       --arg args "${ARGS}" \
-      '{date: $date, user: $user, node: $node, pbs_jobid: $pbs_jobid, mode: $mode, repository: $repository, branch: $branch, input: $input, outdir: $outdir, nf_config: $nf_config, args: $args}' > "${METRICS_FILE}"; then
+      '{date: $date, user: $user, node: $node, pbs_jobid: $pbs_jobid, mode: $mode, repository: $project, branch: $revision, input: $input, outdir: $outdir, nf_config: $nf_config, args: $args}' > "${METRICS_FILE}"; then
     echo "Warning: unable to write metrics log to ${METRICS_LOG_PATH}; continuing without metrics." >&2
     METRICS_FILE=""
   fi
@@ -475,7 +483,7 @@ if [ "${RESUME_RUN}" == "true" ]; then
     NEXTFLOW_RESUME_ARGS+=("-resume")
 fi
 
-nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run ${REPOSITORY} -r ${BRANCH} -latest \
+nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run "${PROJECT}" "${NEXTFLOW_REVISION_ARGS[@]}" \
     --input "${SAMPLESHEET}" \
     --outdir "${OUT_DIR}" \
     --mode "${PIPELINE_MODE}" \

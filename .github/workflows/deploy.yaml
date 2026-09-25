@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     env:
       SSH_HOST: ${{ secrets.HOST }}

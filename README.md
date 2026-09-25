@@ -55,7 +55,13 @@ PROJECT_ROOT=/srv/scratch/sbf-pipelines/proteinfold
 # Database path for structure prediction modules
 DB_PATH=/srv/scratch/sbf-pipelines/proteinfold/dbs
 
-# Runs are currently pinned to the ASBC proteinfold master branch in script.sh.erb.
+# Local staged deployment. Leave REVISION empty when PROJECT is a local path.
+PROJECT=${PROJECT_ROOT}/releases/current
+REVISION=
+
+# Remote deployment alternative:
+# PROJECT=nf-core/proteinfold
+# REVISION=2.0.0
 
 # Debug group for permissions on debug files
 DEBUGGROUP=sbf-pipelines
@@ -75,8 +81,8 @@ BASE_NXF_WORK=/srv/scratch/${USER}/.proteinfold/work
 # Nextflow Apptainer/Singularity image cache/library directories (set here or via institutional Nextflow config, e.g. https://github.com/nf-core/configs/blob/master/conf/pipeline/proteinfold/unsw_katana.config)
 # NXF_APPTAINER_CACHEDIR=/srv/scratch/${USER}/.images
 # NXF_SINGULARITY_CACHEDIR=/srv/scratch/${USER}/.images
-# NXF_APPTAINER_LIBRARYDIR=/srv/scratch/sbf-pipelines/proteinfold/singularity
-# NXF_SINGULARITY_LIBRARYDIR=/srv/scratch/sbf-pipelines/proteinfold/singularity
+# NXF_APPTAINER_LIBRARYDIR=/srv/scratch/sbf-pipelines/containers
+# NXF_SINGULARITY_LIBRARYDIR=/srv/scratch/sbf-pipelines/containers
 ```
 
 If a run is interrupted, use **Relaunch** from its Open OnDemand job card. This
