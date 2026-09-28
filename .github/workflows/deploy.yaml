@@ -1,65 +1,81 @@
 name: Deploy app
 
 on:
-  push:
-    branches:
-      - master
   release:
     types:
       - published
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing repository tag to deploy or redeploy
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-${{ github.event_name }}-${{ github.ref_name }}
-  cancel-in-progress: true
+  group: deploy-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    if: ${{ false }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
     env:
-      SSH_HOST: ${{ secrets.HOST }}
-      SSH_USER: ${{ secrets.USER }}
-      APP_PATH: ${{ secrets.APP_PATH }}
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
     steps:
-      - name: Set deployment target
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            echo "DEPLOY_TARGET=${APP_PATH}/prod/kod-proteinfold" >> "${GITHUB_ENV}"
-            echo "DEPLOY_LABEL=production" >> "${GITHUB_ENV}"
-            echo "DEPLOY_REF=refs/tags/${{ github.event.release.tag_name }}" >> "${GITHUB_ENV}"
-          else
-            echo "DEPLOY_TARGET=${APP_PATH}/dev" >> "${GITHUB_ENV}"
-            echo "DEPLOY_LABEL=development" >> "${GITHUB_ENV}"
-            echo "DEPLOY_REF=origin/master" >> "${GITHUB_ENV}"
-          fi
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ env.RELEASE_TAG }}
 
-      - name: Validate deployment inputs
+      - name: Set deployment target
+        env:
+          APP_PATH: ${{ secrets.APP_PATH }}
         run: |
-          for required in SSH_HOST SSH_USER APP_PATH DEPLOY_TARGET DEPLOY_REF; do
-            if [ -z "${!required:-}" ]; then
-              echo "Missing required value: ${required}" >&2
-              exit 1
-            fi
-          done
+          if [ -z "${APP_PATH}" ]; then
+            echo "APP_PATH is not configured" >&2
+            exit 1
+          fi
+          echo "DEPLOY_TARGET=${APP_PATH}/prod/kod-proteinfold" >> "${GITHUB_ENV}"
+          echo "DEPLOY_COMMIT=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
 
       - name: Start SSH agent
-        uses: webfactory/ssh-agent@v0.9.1
+        uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd # v0.9.1
         with:
           ssh-private-key: ${{ secrets.SSH_KEY }}
 
-      - name: Add host to known_hosts
+      - name: Install pinned host key
+        env:
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H -p 22 "${SSH_HOST}" >> ~/.ssh/known_hosts
+          umask 077
+          printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
 
       - name: Deploy Git revision
+        env:
+          SSH_HOST: ${{ secrets.HOST }}
+          SSH_USER: ${{ secrets.USER }}
         run: |
-          deploy_command=$(printf 'ood-proteinfold-deploy %q %q' "${DEPLOY_TARGET}" "${DEPLOY_REF}")
-          ssh "${SSH_USER}@${SSH_HOST}" "${deploy_command}"
+          deploy_command=$(printf 'ood-proteinfold-deploy %q %q' "${DEPLOY_TARGET}" "refs/tags/${RELEASE_TAG}")
+          ssh -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "${SSH_USER}@${SSH_HOST}" "${deploy_command}"
+
+      - name: Verify deployed revision
+        env:
+          SSH_HOST: ${{ secrets.HOST }}
+          SSH_USER: ${{ secrets.USER }}
+        run: |
+          verify_command=$(printf 'git -C %q rev-parse HEAD' "${DEPLOY_TARGET}")
+          actual_commit=$(ssh -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            "${SSH_USER}@${SSH_HOST}" "${verify_command}")
+          test "${actual_commit}" = "${DEPLOY_COMMIT}"
 
       - name: Report deployment target
         run: |
-          echo "Deployed ${DEPLOY_LABEL} (${DEPLOY_REF}) to ${DEPLOY_TARGET}"
+          echo "Deployed ${RELEASE_TAG} to ${DEPLOY_TARGET}"
