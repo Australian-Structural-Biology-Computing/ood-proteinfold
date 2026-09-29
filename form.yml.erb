@@ -18,6 +18,7 @@ form:
     - esmfold_num_recycles
     - boltz_use_potentials
     - save_intermediates
+    - generate_plddt_previews
     - citation_request
     - katana_citation
 
@@ -211,6 +212,14 @@ attributes:
                             This option is enabled and locked while ColabFold conformational sampling is active.
                         </div>
 
+    generate_plddt_previews:
+        widget: "check_box"
+        label: "Generate pLDDT Mugshot Images"
+        checked_value: "true"
+        unchecked_value: "false"
+        checked: true
+        help: |
+            Create front, side, and top confidence-coloured previews and a standalone gallery under <code>mugshots/</code>.
 
     citation_request:
         label: "Facility Citation"

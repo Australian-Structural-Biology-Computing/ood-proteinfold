@@ -39,7 +39,8 @@ class TemplateContext
       esmfold_num_recycles: 4,
       boltz_use_potentials: "false",
       random_seed: "",
-      save_intermediates: "false"
+      save_intermediates: "false",
+      generate_plddt_previews: "true"
     )
   end
 
