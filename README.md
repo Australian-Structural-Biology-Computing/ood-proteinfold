@@ -8,6 +8,7 @@
 - Supports multiple prediction methods found within [nf-core/proteinfold](https://nf-co.re/proteinfold/).
 - Customisable run parameters via web form.
 - Results accessible via web interface.
+- After every successful run, a pLDDT-coloured "mugshot" PNG is written next to each final/top-ranked structure so hundreds of results can be assessed at a glance (see [Protein mugshots](#protein-mugshots-plddt-thumbnails)).
 
 ## Usage
 
@@ -21,6 +22,7 @@
 - `form.yml.erb`: Defines the web form and input parameters.
 - `template/script.sh.erb`: Main job script for running predictions.
 - `template/sanitise_input.py`: Validates and normalises staged FASTA and samplesheet inputs.
+- `template/protein_mugshots.py`: Batch renderer that writes a pLDDT-coloured PNG next to every top-ranked structure after a successful run.
 - `submit.yml.erb`: Job submission configuration.
 - `info.html.erb`: Displays result links after job completion.
 - `.github/workflows/`: CI/CD deployment workflows.
@@ -93,6 +95,38 @@ with the same options to resume it: a new submission has different Nextflow
 state and is checked as a new run. After Nextflow completes successfully, a
 marker in the persistent run state prevents the job card from submitting the
 completed workflow again.
+
+### Protein mugshots (pLDDT thumbnails)
+
+After a successful run, `template/protein_mugshots.py` finds supported structures directly inside `top_ranked_structures/` directories and writes a 1200×400 front/side/top PNG beside each one. Names use `<structure-stem>_plddt_mugshot.png`, with deterministic suffixes for collisions. Colours follow the AlphaFold pLDDT bands: ≥90 `#0053D6`, 70–<90 `#65CBF3`, 50–<70 `#FFDB13`, and <50 `#FF7D45`.
+
+One headless Apptainer/PyMOL process renders the whole run; one host ImageMagick process composes the panels and creates quality-90 WebP previews. `<OUT_DIR>/mugshots/mugshot_index.html` embeds those previews as a standalone gallery, while `mugshot_manifest.tsv` records outcomes. Failures remain non-fatal. Valid PNGs are skipped on reruns unless `MUGSHOT_FORCE=1`; corrupt files are regenerated. PyMOL uses at most `PBS_NCPUS`. The host requires ImageMagick with WebP support.
+
+After loading an eligible structure, PyMOL validates its atom `b` values before colouring it. Values must be numeric, non-constant, and use the 0–100 scale. The driver limits eligible method/format pairs so ordinary crystallographic B-factors are not presented as pLDDT.
+
+Set `SHARED_CONTAINER_DIR` to the shared container library and provision the pinned image once; runtime jobs never pull from the network:
+
+```bash
+MUGSHOT_IMAGE="${SHARED_CONTAINER_DIR}/jysgro-pymol-3.1.0-amd64-ab2facf7869c.sif"
+apptainer pull "${MUGSHOT_IMAGE}" \
+    docker://jysgro/pymol@sha256:ab2facf7869c4f06c924c287e8ccca127da21fa8954539e1a8e6bfde3128eca5
+sha256sum "${MUGSHOT_IMAGE}"
+# Expected: 36c541702e06f76212de78af601386355cc3fc4148342221235c481b347bce31
+```
+
+Optional `template/.env` overrides:
+
+```bash
+MUGSHOT_RENDERER_IMAGE="${SHARED_CONTAINER_DIR}/jysgro-pymol-3.1.0-amd64-ab2facf7869c.sif"
+MUGSHOT_APPTAINER_BIN=apptainer
+MUGSHOT_APPTAINER_EXTRA_BINDS=
+MUGSHOT_WIDTH=1200
+MUGSHOT_HEIGHT=400
+# Defaults to PBS_NCPUS and cannot exceed the allocation.
+# MUGSHOT_MAX_THREADS=2
+MUGSHOT_TIMEOUT=3600
+MUGSHOT_FORCE=0
+```
 
 ### Python Environment for samplesheet-utils
 
