@@ -8,7 +8,7 @@
 - Supports multiple prediction methods found within [nf-core/proteinfold](https://nf-co.re/proteinfold/).
 - Customisable run parameters via web form.
 - Results accessible via web interface.
-- After every successful run, a pLDDT-coloured "mugshot" PNG is written next to each final/top-ranked structure so hundreds of results can be assessed at a glance (see [Protein mugshots](#protein-mugshots-plddt-thumbnails)).
+- Optionally generates pLDDT-coloured mugshot images for final/top-ranked structures (see [pLDDT mugshot images](#plddt-mugshot-images)).
 
 ## Usage
 
@@ -22,7 +22,7 @@
 - `form.yml.erb`: Defines the web form and input parameters.
 - `template/script.sh.erb`: Main job script for running predictions.
 - `template/sanitise_input.py`: Validates and normalises staged FASTA and samplesheet inputs.
-- `template/protein_mugshots.py`: Batch renderer that writes a pLDDT-coloured PNG next to every top-ranked structure after a successful run.
+- `template/protein_mugshots.py`: Optional batch renderer for pLDDT mugshot images and the standalone gallery.
 - `submit.yml.erb`: Job submission configuration.
 - `info.html.erb`: Displays result links after job completion.
 - `.github/workflows/`: CI/CD deployment workflows.
@@ -96,9 +96,9 @@ state and is checked as a new run. After Nextflow completes successfully, a
 marker in the persistent run state prevents the job card from submitting the
 completed workflow again.
 
-### Protein mugshots (pLDDT thumbnails)
+### pLDDT mugshot images
 
-After a successful run, `template/protein_mugshots.py` finds supported structures directly inside `top_ranked_structures/` directories and writes a 1200×400 front/side/top PNG beside each one. Names use `<structure-stem>_plddt_mugshot.png`, with deterministic suffixes for collisions. Colours follow the AlphaFold pLDDT bands: ≥90 `#0053D6`, 70–<90 `#65CBF3`, 50–<70 `#FFDB13`, and <50 `#FF7D45`.
+When the default-enabled **Generate pLDDT Mugshot Images** option is selected, `template/protein_mugshots.py` finds supported structures directly inside `top_ranked_structures/` directories after a successful run and writes a three-panel 1200×400 PNG beside each one. Names use `<structure-stem>_plddt_mugshot.png`, with deterministic suffixes for collisions. Colours follow the AlphaFold pLDDT bands: ≥90 `#0053D6`, 70–<90 `#65CBF3`, 50–<70 `#FFDB13`, and <50 `#FF7D45`.
 
 One headless Apptainer/PyMOL process renders the whole run; one host ImageMagick process composes the panels and creates quality-90 WebP previews. `<OUT_DIR>/mugshots/mugshot_index.html` embeds those previews as a standalone gallery, while `mugshot_manifest.tsv` records outcomes. Failures remain non-fatal. Valid PNGs are skipped on reruns unless `MUGSHOT_FORCE=1`; corrupt files are regenerated. PyMOL uses at most `PBS_NCPUS`. The host requires ImageMagick with WebP support.
 

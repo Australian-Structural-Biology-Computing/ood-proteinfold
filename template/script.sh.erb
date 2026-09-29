@@ -359,6 +359,7 @@ COLABFOLD_MAX_MSA="<%= context.colabfold_max_msa %>"
 ESMFOLD_RECYCLES="<%= context.esmfold_num_recycles %>"
 BOLTZ_USE_POTENTIALS="<%= context.boltz_use_potentials %>"
 SAVE_INTERMEDIATES="<%= context.save_intermediates %>"
+GENERATE_PLDDT_PREVIEWS="<%= context.generate_plddt_previews %>"
 AF3_WEIGHTS="<%= context.af3_weights %>"
 
 # UI enforces this when ColabFold advanced sampling is active, but keep the
@@ -495,11 +496,11 @@ nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run "${PROJECT}" "${NEXTFLOW_REVISION_ARGS
     "${NEXTFLOW_RESUME_ARGS[@]}" \
     -profile apptainer
 
-# Render all top-ranked pLDDT mugshots in one non-fatal batch. The conditional
-# prevents renderer errors from blocking the completion marker.
-if ! python3 "${OOD_SESSION_DIR}/protein_mugshots.py" --out-dir "${OUT_DIR}" 2>>"${DEBUG_LOG}"; then
-    echo "WARNING: pLDDT mugshot rendering did not finish cleanly; ProteinFold results are unaffected." >&2
-    echo "WARNING: See ${OUT_DIR}/mugshots/mugshot_manifest.tsv for per-structure outcomes." >&2
+# Render optional pLDDT previews without blocking the completion marker.
+if [ "${GENERATE_PLDDT_PREVIEWS}" == "true" ]; then
+    if ! python3 "${OOD_SESSION_DIR}/protein_mugshots.py" --out-dir "${OUT_DIR}" 2>>"${DEBUG_LOG}"; then
+        echo "WARNING: pLDDT preview generation failed; ProteinFold results are unaffected." >&2
+    fi
 fi
 
 touch "${COMPLETED_MARKER}"
