@@ -495,4 +495,11 @@ nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run "${PROJECT}" "${NEXTFLOW_REVISION_ARGS
     "${NEXTFLOW_RESUME_ARGS[@]}" \
     -profile apptainer
 
+# Render all top-ranked pLDDT mugshots in one non-fatal batch. The conditional
+# prevents renderer errors from blocking the completion marker.
+if ! python3 "${OOD_SESSION_DIR}/protein_mugshots.py" --out-dir "${OUT_DIR}"; then
+    echo "WARNING: pLDDT mugshot rendering did not finish cleanly; ProteinFold results are unaffected." >&2
+    echo "WARNING: See ${OUT_DIR}/mugshots/mugshot_manifest.tsv for per-structure outcomes." >&2
+fi
+
 touch "${COMPLETED_MARKER}"
