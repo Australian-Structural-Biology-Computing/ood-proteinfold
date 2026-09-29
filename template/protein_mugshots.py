@@ -76,6 +76,10 @@ def log(message):
     print("[mugshots] %s" % message, flush=True)
 
 
+def debug(message):
+    print("[mugshots] %s" % message, file=sys.stderr, flush=True)
+
+
 def valid_png(path):
     """Check PNG framing and CRCs without an image-library dependency."""
     try:
@@ -398,7 +402,7 @@ def render(settings, tasks, out_dir, manifest_dir):
             fail(task, "renderer_unavailable", str(error))
         return ""
 
-    log("Rendering %d mugshot(s) with one Apptainer/PyMOL invocation..." % len(pending))
+    log("Generating pLDDT previews for %d structures..." % len(pending))
     process = None
     stdout = stderr = b""
     timed_out = False
@@ -462,9 +466,9 @@ def render(settings, tasks, out_dir, manifest_dir):
                     pass
     compose(tasks, manifest_dir, settings.timeout)
     if not completed and not timed_out:
-        log("WARNING: renderer did not report batch completion")
+        debug("WARNING: renderer did not report batch completion")
     if version:
-        log("Renderer version: PyMOL %s" % version)
+        debug("Renderer version: PyMOL %s" % version)
     return version
 
 
@@ -594,13 +598,13 @@ def run(args):
     skipped = sum(task["status"] == "skipped" for task in tasks)
     existing_index = os.path.join(manifest_dir, INDEX)
     reuse_index = bool(tasks) and skipped == len(tasks) and os.path.isfile(existing_index) and os.path.getsize(existing_index) > 0
-    log("Discovered %d structure(s): %d to render, %d already rendered." % (len(tasks), pending, skipped))
+    debug("Discovered %d structure(s): %d to render, %d already rendered." % (len(tasks), pending, skipped))
     renderer = "apptainer:%s" % os.path.basename(configured.image)
     version = ""
     try:
         version = render(configured, tasks, out_dir, manifest_dir)
     except Exception as error:
-        log("WARNING: mugshot processing failed (%s); ProteinFold results are unaffected." % error)
+        debug("WARNING: mugshot processing failed (%s); ProteinFold results are unaffected." % error)
         for task in tasks:
             if task["status"] == "pending":
                 fail(task, "driver_failed", str(error))
@@ -609,12 +613,12 @@ def run(args):
     rendered = sum(task["status"] == "rendered" for task in tasks)
     skipped = sum(task["status"] == "skipped" for task in tasks)
     failed = sum(task["status"] == "failed" for task in tasks)
-    log("Mugshot summary: %d rendered, %d skipped, %d failed." % (rendered, skipped, failed))
+    log("pLDDT previews complete: %d created, %d reused, %d failed." % (rendered, skipped, failed))
     for task in tasks:
         if task["status"] == "failed":
-            log("FAILED %s: %s" % (task["candidate"]["relative"], task["error"]))
-    log("Manifest: %s" % manifest)
-    log("Index: %s" % index)
+            debug("FAILED %s: %s" % (task["candidate"]["relative"], task["error"]))
+    debug("Manifest: %s" % manifest)
+    debug("Index: %s" % index)
     return 0
 
 
@@ -636,7 +640,8 @@ def main(argv=None):
     try:
         return run(parser().parse_args(argv))
     except Exception as error:
-        log("WARNING: unexpected mugshot failure (%s); continuing." % error)
+        debug("WARNING: unexpected mugshot failure (%s); continuing." % error)
+        log("pLDDT previews unavailable; ProteinFold results are unaffected.")
         return 0
 
 
