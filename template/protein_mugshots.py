@@ -8,13 +8,9 @@ import html
 import os
 import shutil
 import signal
-import struct
 import subprocess
 import sys
-import time
 import urllib.parse
-import zlib
-from collections import namedtuple
 
 TOP_RANKED_DIR = "top_ranked_structures"
 STRUCTURE_SUFFIXES = (".pdb", ".cif", ".mmcif")
@@ -33,14 +29,6 @@ DEFAULT_HEIGHT = 400
 DEFAULT_TIMEOUT = 3600
 DEFAULT_THREADS = 2
 WEBP_QUALITY = 90
-
-METHOD_FORMATS = {
-    "alphafold2": {".pdb"},
-    "alphafold3": {".cif", ".mmcif"},
-    "boltz": {".pdb", ".cif", ".mmcif"},
-    "colabfold": {".pdb"},
-    "esmfold": {".pdb"},
-}
 
 BANDS = (
     ("af_plddt_very_high", (0.0000, 0.3255, 0.8392), "b > 89.9999"),
@@ -64,9 +52,6 @@ MANIFEST_FIELDS = (
     "png_bytes",
 )
 
-Settings = namedtuple(
-    "Settings", "image apptainer extra_binds width height threads timeout force"
-)
 RESULT = "MUGSHOT_RESULT"
 VERSION = "MUGSHOT_RENDERER_VERSION"
 COMPLETE = "MUGSHOT_BATCH_COMPLETE"
@@ -81,32 +66,9 @@ def debug(message):
 
 
 def valid_png(path):
-    """Check PNG framing and CRCs without an image-library dependency."""
     try:
-        with open(path, "rb") as handle:
-            if handle.read(8) != b"\x89PNG\r\n\x1a\n":
-                return False
-            first = True
-            while True:
-                raw_length = handle.read(4)
-                if len(raw_length) != 4:
-                    return False
-                length = struct.unpack(">I", raw_length)[0]
-                if length > 512 * 1024 * 1024:
-                    return False
-                kind = handle.read(4)
-                data = handle.read(length)
-                raw_crc = handle.read(4)
-                if len(kind) != 4 or len(data) != length or len(raw_crc) != 4:
-                    return False
-                if zlib.crc32(kind + data) & 0xFFFFFFFF != struct.unpack(">I", raw_crc)[0]:
-                    return False
-                if first and kind != b"IHDR":
-                    return False
-                first = False
-                if kind == b"IEND":
-                    return handle.read(1) == b""
-    except (OSError, struct.error):
+        return os.path.isfile(path) and os.path.getsize(path) > 0
+    except OSError:
         return False
 
 
@@ -126,10 +88,7 @@ def discover(out_dir):
             continue
         dirs[:] = []
         relative = os.path.relpath(root, out_dir).split(os.sep)
-        method = next(
-            (part.lower() for part in relative if part.lower() in METHOD_FORMATS),
-            "unknown",
-        )
+        method = relative[0].lower() if relative else "unknown"
         for name in sorted(files):
             suffix = os.path.splitext(name)[1].lower()
             path = os.path.join(root, name)
@@ -146,7 +105,7 @@ def discover(out_dir):
     return sorted(candidates, key=lambda item: item["relative"])
 
 
-def plan(candidates, force=False):
+def plan(candidates):
     counts = {}
     for candidate in candidates:
         key = (os.path.dirname(candidate["path"]), candidate["stem"])
@@ -166,7 +125,6 @@ def plan(candidates, force=False):
             )
             sequence += 1
         claimed.add(target)
-        supported = candidate["suffix"] in METHOD_FORMATS.get(candidate["method"], set())
         task = {
             "candidate": candidate,
             "target": target,
@@ -181,11 +139,7 @@ def plan(candidates, force=False):
             "render_path": "",
             "preview": "",
         }
-        if not supported:
-            task["status"] = "failed"
-            task["validation"] = "unsupported_confidence_encoding"
-            task["error"] = "unverified method/format pair"
-        elif not force and valid_png(target):
+        if valid_png(target):
             task["status"] = "skipped"
             task["validation"] = "existing_png"
             task["skip_reason"] = "already_rendered"
@@ -271,30 +225,20 @@ def pymol_script(tasks, width, height, threads):
     return "\n".join(lines) + "\n"
 
 
-def renderer_command(settings, script_path, out_dir, tasks):
-    if not settings.apptainer or not shutil.which(settings.apptainer):
+def renderer_command(image, threads, script_path, out_dir):
+    apptainer = shutil.which("apptainer")
+    if not apptainer:
         raise RuntimeError("Apptainer executable not found")
-    if not os.path.isfile(settings.image) or not os.access(settings.image, os.R_OK):
-        raise RuntimeError("renderer image is unavailable: %s" % settings.image)
+    if not os.path.isfile(image) or not os.access(image, os.R_OK):
+        raise RuntimeError("renderer image is unavailable: %s" % image)
     real_out = os.path.realpath(out_dir)
-    binds = [real_out]
-    for task in tasks:
-        parent = os.path.dirname(os.path.realpath(task["candidate"]["path"]))
-        try:
-            inside = os.path.commonpath([real_out, parent]) == real_out
-        except ValueError:
-            inside = False
-        if not inside and parent not in binds:
-            binds.append(parent)
-    command = [settings.apptainer, "exec", "--cleanenv"]
-    for path in binds:
-        command.extend(["--bind", "%s:%s" % (path, path)])
-    for bind in settings.extra_binds:
-        command.extend(["--bind", bind])
-    command.extend(["--env", "HOME=%s" % os.path.dirname(script_path)])
+    command = [
+        apptainer, "exec", "--cleanenv", "--bind", "%s:%s" % (real_out, real_out),
+        "--env", "HOME=%s" % os.path.dirname(script_path),
+    ]
     for name in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
-        command.extend(["--env", "%s=%d" % (name, settings.threads)])
-    command.extend([settings.image, "pymol", "-cq", script_path])
+        command.extend(["--env", "%s=%d" % (name, threads)])
+    command.extend([image, "pymol", "-cq", script_path])
     return command
 
 
@@ -384,7 +328,7 @@ def cleanup(tasks):
                 pass
 
 
-def render(settings, tasks, out_dir, manifest_dir):
+def render(image, threads, tasks, out_dir, manifest_dir):
     pending = [task for task in tasks if task["status"] == "pending"]
     if not pending:
         return ""
@@ -394,9 +338,9 @@ def render(settings, tasks, out_dir, manifest_dir):
         )
     script_path = os.path.join(manifest_dir, BATCH_SCRIPT)
     with open(script_path, "w") as handle:
-        handle.write(pymol_script(tasks, settings.width, settings.height, settings.threads))
+        handle.write(pymol_script(tasks, DEFAULT_WIDTH, DEFAULT_HEIGHT, threads))
     try:
-        command = renderer_command(settings, script_path, out_dir, pending)
+        command = renderer_command(image, threads, script_path, out_dir)
     except RuntimeError as error:
         for task in pending:
             fail(task, "renderer_unavailable", str(error))
@@ -407,10 +351,11 @@ def render(settings, tasks, out_dir, manifest_dir):
     stdout = stderr = b""
     timed_out = False
     try:
+        # Isolate Apptainer and PyMOL so the renderer timeout stops both.
         process = subprocess.Popen(
             command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True
         )
-        stdout, stderr = process.communicate(timeout=settings.timeout)
+        stdout, stderr = process.communicate(timeout=DEFAULT_TIMEOUT)
     except subprocess.TimeoutExpired:
         timed_out = True
         try:
@@ -436,7 +381,7 @@ def render(settings, tasks, out_dir, manifest_dir):
             completed = True
     process_error = ""
     if timed_out:
-        process_error = "timed out after %ds" % settings.timeout
+        process_error = "timed out after %ds" % DEFAULT_TIMEOUT
     elif process.returncode:
         process_error = "exited with status %d" % process.returncode
     stderr_tail = " | ".join(stderr.decode("utf-8", "replace").strip().splitlines()[-3:])
@@ -464,7 +409,7 @@ def render(settings, tasks, out_dir, manifest_dir):
                     os.unlink(panel)
                 except OSError:
                     pass
-    compose(tasks, manifest_dir, settings.timeout)
+    compose(tasks, manifest_dir, DEFAULT_TIMEOUT)
     if not completed and not timed_out:
         debug("WARNING: renderer did not report batch completion")
     if version:
@@ -561,48 +506,25 @@ def write_index(directory, tasks):
             pass
 
 
-def integer_setting(name, value, default, minimum, maximum):
-    try:
-        parsed = value or int(os.environ.get(name, ""))
-    except (TypeError, ValueError):
-        parsed = default
-    return parsed if minimum <= parsed <= maximum else default
-
-
-def settings(args):
-    allocated = integer_setting("PBS_NCPUS", 0, DEFAULT_THREADS, 1, 100000)
-    requested = integer_setting("MUGSHOT_MAX_THREADS", args.threads, allocated, 1, 100000)
-    return Settings(
-        args.renderer_image or os.environ.get("MUGSHOT_RENDERER_IMAGE", DEFAULT_IMAGE),
-        args.apptainer_bin or os.environ.get("MUGSHOT_APPTAINER_BIN", "apptainer"),
-        [item.strip() for item in os.environ.get("MUGSHOT_APPTAINER_EXTRA_BINDS", "").split(",") if item.strip()],
-        integer_setting("MUGSHOT_WIDTH", args.width, DEFAULT_WIDTH, 192, 4800),
-        integer_setting("MUGSHOT_HEIGHT", args.height, DEFAULT_HEIGHT, 64, 1600),
-        min(requested, allocated),
-        integer_setting("MUGSHOT_TIMEOUT", args.timeout, DEFAULT_TIMEOUT, 1, 86400),
-        args.force or os.environ.get("MUGSHOT_FORCE", "").lower() in ("1", "true", "yes"),
-    )
-
-
 def run(args):
     out_dir = os.path.realpath(os.path.abspath(args.out_dir))
     manifest_dir = os.path.join(out_dir, MUGSHOT_DIR)
     os.makedirs(manifest_dir, exist_ok=True)
-    configured = settings(args)
-    candidates = discover(out_dir)
-    tasks = plan(candidates, configured.force)
-    if args.dry_run:
-        log("Dry run: %d structure(s), %d eligible." % (len(tasks), sum(task["status"] == "pending" for task in tasks)))
-        return 0
+    image = os.environ.get("MUGSHOT_RENDERER_IMAGE", DEFAULT_IMAGE)
+    try:
+        threads = max(1, int(os.environ.get("PBS_NCPUS", DEFAULT_THREADS)))
+    except ValueError:
+        threads = DEFAULT_THREADS
+    tasks = plan(discover(out_dir))
     pending = sum(task["status"] == "pending" for task in tasks)
     skipped = sum(task["status"] == "skipped" for task in tasks)
     existing_index = os.path.join(manifest_dir, INDEX)
     reuse_index = bool(tasks) and skipped == len(tasks) and os.path.isfile(existing_index) and os.path.getsize(existing_index) > 0
     debug("Discovered %d structure(s): %d to render, %d already rendered." % (len(tasks), pending, skipped))
-    renderer = "apptainer:%s" % os.path.basename(configured.image)
+    renderer = "apptainer:%s" % os.path.basename(image)
     version = ""
     try:
-        version = render(configured, tasks, out_dir, manifest_dir)
+        version = render(image, threads, tasks, out_dir, manifest_dir)
     except Exception as error:
         debug("WARNING: mugshot processing failed (%s); ProteinFold results are unaffected." % error)
         for task in tasks:
@@ -625,14 +547,6 @@ def run(args):
 def parser():
     result = argparse.ArgumentParser(description="Render pLDDT mugshots for top-ranked structures.")
     result.add_argument("--out-dir", required=True)
-    result.add_argument("--width", type=int, default=0)
-    result.add_argument("--height", type=int, default=0)
-    result.add_argument("--threads", type=int, default=0)
-    result.add_argument("--timeout", type=int, default=0)
-    result.add_argument("--renderer-image", default="")
-    result.add_argument("--apptainer-bin", default="")
-    result.add_argument("--force", action="store_true")
-    result.add_argument("--dry-run", action="store_true")
     return result
 
 
