@@ -35,16 +35,12 @@ jobs:
         env:
           APP_PATH: ${{ secrets.APP_PATH }}
         run: |
-          if [ -z "${APP_PATH}" ]; then
-            echo "APP_PATH is not configured" >&2
-            exit 1
-          fi
           case "${APP_PATH}" in
             /*) ;;
             *) echo "APP_PATH must be an absolute path" >&2; exit 1;;
           esac
           case "${APP_PATH}" in
-            *[[:space:]]*) echo "APP_PATH must not contain whitespace" >&2; exit 1;;
+            *$'\n'*|*$'\r'*) echo "APP_PATH must not contain newlines" >&2; exit 1;;
           esac
           printf 'DEPLOY_TARGET=%s/prod/kod-proteinfold\n' "${APP_PATH}" >> "${GITHUB_ENV}"
           printf 'DEPLOY_COMMIT=%s\n' "$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
@@ -71,7 +67,11 @@ jobs:
           actual_commit=$(ssh -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
             "${SSH_USER}@${SSH_HOST}" "${deploy_command}")
-          test "${actual_commit}" = "${DEPLOY_COMMIT}"
+          if [[ "${actual_commit}" != "${DEPLOY_COMMIT}" ]]; then
+            printf 'Deployment verification failed\nExpected: %s\nActual:   %s\n' \
+              "${DEPLOY_COMMIT}" "${actual_commit}" >&2
+            exit 1
+          fi
 
       - name: Report deployment target
         run: |
