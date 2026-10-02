@@ -39,8 +39,15 @@ jobs:
             echo "APP_PATH is not configured" >&2
             exit 1
           fi
-          echo "DEPLOY_TARGET=${APP_PATH}/prod/kod-proteinfold" >> "${GITHUB_ENV}"
-          echo "DEPLOY_COMMIT=$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
+          case "${APP_PATH}" in
+            /*) ;;
+            *) echo "APP_PATH must be an absolute path" >&2; exit 1;;
+          esac
+          case "${APP_PATH}" in
+            *[[:space:]]*) echo "APP_PATH must not contain whitespace" >&2; exit 1;;
+          esac
+          printf 'DEPLOY_TARGET=%s/prod/kod-proteinfold\n' "${APP_PATH}" >> "${GITHUB_ENV}"
+          printf 'DEPLOY_COMMIT=%s\n' "$(git rev-parse HEAD)" >> "${GITHUB_ENV}"
 
       - name: Start SSH agent
         uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd # v0.9.1
@@ -55,25 +62,15 @@ jobs:
           umask 077
           printf '%s\n' "${SSH_KNOWN_HOSTS}" > ~/.ssh/known_hosts
 
-      - name: Deploy Git revision
+      - name: Deploy and verify Git revision
         env:
           SSH_HOST: ${{ secrets.HOST }}
           SSH_USER: ${{ secrets.USER }}
         run: |
           deploy_command=$(printf 'ood-proteinfold-deploy %q %q' "${DEPLOY_TARGET}" "refs/tags/${RELEASE_TAG}")
-          ssh -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
-            "${SSH_USER}@${SSH_HOST}" "${deploy_command}"
-
-      - name: Verify deployed revision
-        env:
-          SSH_HOST: ${{ secrets.HOST }}
-          SSH_USER: ${{ secrets.USER }}
-        run: |
-          verify_command=$(printf 'git -C %q rev-parse HEAD' "${DEPLOY_TARGET}")
           actual_commit=$(ssh -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
-            "${SSH_USER}@${SSH_HOST}" "${verify_command}")
+            "${SSH_USER}@${SSH_HOST}" "${deploy_command}")
           test "${actual_commit}" = "${DEPLOY_COMMIT}"
 
       - name: Report deployment target
