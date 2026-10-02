@@ -76,13 +76,17 @@ fi
 trap "collect_debug_files" ERR
 
 function collect_debug_files() {
+    trap - ERR
+    set +e
     echo "Error occurred, copying debug files to ${DEBUGDIR}"
     mkdir -p "$DEBUGDIR"
     cp -f "${DEBUG_LOG}" "$DEBUGDIR/" 2>/dev/null || true
-    rsync -a --no-perms --no-owner --no-group --max-size=50m . "${NXF_WORK}" "$DEBUGDIR/"
-    find "$DEBUGDIR" -type d -exec chmod 2770 {} +
-    find "$DEBUGDIR" -type f -exec chmod 660 {} +
-    chgrp "$DEBUGGROUP" -R "$DEBUGDIR"
+    rsync -a --no-perms --no-owner --no-group --max-size=50m . "${NXF_WORK}" "$DEBUGDIR/" 2>/dev/null || true
+    chgrp "$DEBUGGROUP" -R "$DEBUGDIR" 2>/dev/null || true
+    # Files can vanish between rsync and chmod (live Nextflow work dir), so
+    # ignore per-file failures rather than masking the original exit code.
+    find "$DEBUGDIR" -type d -exec chmod 2770 {} + 2>/dev/null || true
+    find "$DEBUGDIR" -type f -exec chmod 660 {} + 2>/dev/null || true
 }
 
 function write_completion_metrics() {
@@ -97,6 +101,7 @@ function write_completion_metrics() {
 }
 
 trap 'write_completion_metrics "$?"' EXIT
+{ source "${OOD_SESSION_DIR}/proteinfold_maintenance.sh"; } >>"${DEBUG_LOG}" 2>&1 || printf '[ProteinFold maintenance] Unable to initialise maintenance; continuing.\n' >>"${DEBUG_LOG}"
 
 # Set dependency version numbers
 VERSION_SAMPLESHEET_UTILS="1.3.4"
