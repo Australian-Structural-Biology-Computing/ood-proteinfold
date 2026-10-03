@@ -6,6 +6,17 @@
     "colabfold_max_msa"
   ];
   const HEADERLESS_SEQUENCE_ID_LENGTH = 6;
+  const SAMPLESHEET_ID_DISALLOWED_PATTERN = /[|\[\], <>."';:()]/g;
+  const OUTPUT_LAYOUTS = {
+    alphafold2: {
+      samplePath: "alphafold2/split_msa_prediction",
+      structureExtension: "pdb"
+    },
+    alphafold3: { samplePath: "alphafold3", structureExtension: "cif" },
+    boltz: { samplePath: "boltz", structureExtension: "cif" },
+    colabfold: { samplePath: "colabfold", structureExtension: "pdb" },
+    esmfold: { samplePath: "esmfold", structureExtension: "pdb" }
+  };
   const AMINO_ACID_SEQUENCE_PATTERN = /^[ACDEFGHIKLMNPQRSTVWYX]+$/;
   const ENTITY_TYPES = new Set(["protein", "ccd", "smiles", "dna", "rna"]);
   const NON_PROTEIN_METHODS = new Set(["alphafold3", "boltz"]);
@@ -49,6 +60,55 @@
     ids.add(id);
     control.setAttribute("aria-describedby", [...ids].join(" "));
   };
+
+  const sampleIdForInput = (file) => {
+    if (file.sampleId) return file.sampleId.trim();
+    if (file.manualSequence) {
+      return file.manualSequence.slice(0, HEADERLESS_SEQUENCE_ID_LENGTH);
+    }
+    const filenameStem = file.label
+      .replace(/ \(samplesheet row \d+\)$/, "")
+      .replace(/\.(?:fa|fasta|ya?ml)$/i, "")
+      .trim();
+    const stagedStem = file.collectionInput
+      ? filenameStem.replace(/\s/g, "-")
+      : filenameStem;
+    return stagedStem.replace(SAMPLESHEET_ID_DISALLOWED_PATTERN, "_");
+  };
+
+  const uniqueSampleIds = (files) => {
+    const usedIds = new Set();
+    return files.map((file) => {
+      const sampleId = sampleIdForInput(file);
+      let uniqueId = sampleId;
+      let suffix = 2;
+      while (usedIds.has(uniqueId)) {
+        uniqueId = `${sampleId}-${suffix}`;
+        suffix += 1;
+      }
+      usedIds.add(uniqueId);
+      return uniqueId;
+    });
+  };
+
+  const outputLocations = (outputRoot, runName, method, sampleIds) => {
+    const layout = OUTPUT_LAYOUTS[method];
+    if (!layout) return [];
+    const runDirectory = runName.replace(/[^A-Za-z0-9]/g, "_");
+    const sampleDirectory = `${outputRoot.replace(/\/+$/, "")}/${runDirectory}/${layout.samplePath}`;
+    const structuresDirectory = `${sampleDirectory}/top_ranked_structures`;
+    return sampleIds.map((sampleId) => ({
+      sampleId,
+      sampleDirectory,
+      sampleEntry: sampleId,
+      structuresDirectory,
+      structureEntry: `${sampleId}.${layout.structureExtension}`
+    }));
+  };
+
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = { outputLocations, sampleIdForInput, uniqueSampleIds };
+  }
 
   const escapeForSelector = (value) => {
     if (window.CSS && typeof window.CSS.escape === "function") {
@@ -416,6 +476,8 @@
     input.dataset.oodInputPreflightBound = "1";
 
     const methodControl = getFieldControl("af_method", "select");
+    const runNameControl = getFieldControl("run_name");
+    const outputRootControl = getFieldControl("output_root");
     const fieldContainer = getFieldContainer(input);
     const fileKinds = [
       [/\.fa(?:sta)?$/i, "fasta"],
@@ -433,6 +495,8 @@
     const severityOrder = { pass: 0, adjustment: 1, review: 2, error: 3 };
     let marker = document.getElementById("ood-proteinfold-input-warning");
     let summary = document.getElementById("ood-proteinfold-input-warning-summary");
+    let outputMarker = document.getElementById("ood-proteinfold-output-warning");
+    let outputSummary = document.getElementById("ood-proteinfold-output-warning-summary");
 
     if (!marker) {
       marker = document.createElement("span");
@@ -453,6 +517,40 @@
       marker.insertAdjacentElement("afterend", summary);
     }
     addDescribedBy(input, summary.id);
+    if (runNameControl && !outputMarker) {
+      outputMarker = document.createElement("span");
+      outputMarker.id = "ood-proteinfold-output-warning";
+      outputMarker.hidden = true;
+      outputMarker.setAttribute("aria-hidden", "true");
+      outputMarker.style.cssText = "display: inline-flex; align-items: center; justify-content: center; margin-left: 0.5rem; border-radius: 50%; width: 1.4rem; height: 1.4rem; color: #fff; font-weight: 700;";
+      runNameControl.insertAdjacentElement("afterend", outputMarker);
+      outputSummary = document.createElement("div");
+      outputSummary.id = "ood-proteinfold-output-warning-summary";
+      outputSummary.hidden = true;
+      outputSummary.setAttribute("role", "status");
+      outputSummary.setAttribute("aria-live", "polite");
+      outputSummary.setAttribute("aria-atomic", "true");
+      outputSummary.style.marginTop = "0.5rem";
+      outputMarker.insertAdjacentElement("afterend", outputSummary);
+    }
+    addDescribedBy(runNameControl, outputSummary?.id);
+
+    const renderOutputCheck = (state, message) => {
+      if (!outputMarker || !outputSummary) return;
+      outputMarker.hidden = state === "waiting";
+      outputMarker.textContent = state === "checking" ? "..." : (state === "collision" ? "!" : "\u2713");
+      outputMarker.style.fontSize = state === "checking" ? "0.7rem" : "1rem";
+      outputMarker.style.background = state === "collision" ? "#dc3545" : (state === "clear" ? "#198754" : "#6c757d");
+      outputMarker.title = message;
+      outputSummary.hidden = state !== "collision";
+      outputSummary.setAttribute("role", state === "collision" ? "alert" : "status");
+      outputSummary.setAttribute("aria-live", state === "collision" ? "assertive" : "polite");
+      outputSummary.className = "alert alert-danger";
+      outputSummary.textContent = state === "collision" ? message : "";
+      runNameControl.setCustomValidity(state === "collision" ? message : "");
+      getFieldContainer(runNameControl)?.classList.toggle("has-error", state === "collision");
+    };
+
     const getInputKind = (path) =>
       fileKinds.find(([pattern]) => pattern.test(path))?.[1] || null;
     const removeWhitespace = (value) =>
@@ -575,7 +673,9 @@
       return rows.map((values, index) => {
         const path = (values[1] || "").trim();
         if (!path) throw new Error(`Samplesheet row ${index + 2} is missing an input path.`);
-        return { path, rowNumber: index + 2 };
+        const sampleId = (values[0] || "").trim();
+        if (!sampleId) throw new Error(`Samplesheet row ${index + 2} is missing an input ID.`);
+        return { path, sampleId, rowNumber: index + 2 };
       });
     };
 
@@ -798,7 +898,7 @@
           throw new Error(`${label} contains an unsupported entity sequence.`);
         }
         validateEntitySequence(entityType, sequence, label);
-        records.push({ sequence, entityType });
+        records.push({ sequence, entityType, header });
       };
 
       for (const match of contents.matchAll(/([^\r\n]*)(\r\n|\r|\n|$)/g)) {
@@ -870,6 +970,7 @@
         hasUnknownProteinResidue: records.some(
           (record) => record.entityType === "protein" && record.sequence.includes("X")
         ),
+        sampleHeaders: records.map((record) => record.header).filter(Boolean),
         changes: warnings
       };
     };
@@ -1083,7 +1184,11 @@
             `Samplesheet row ${row.rowNumber} has unsupported input type: ${row.path}.`
           );
         }
-        return { ...file, label: `${file.label} (samplesheet row ${row.rowNumber})` };
+        return {
+          ...file,
+          sampleId: row.sampleId,
+          label: `${file.label} (samplesheet row ${row.rowNumber})`
+        };
       }));
     };
 
@@ -1105,12 +1210,91 @@
     let preflightTimer = null;
     let activeController = null;
     let lastCheckedFiles = null;
+    let outputTimer = null;
+    let outputController = null;
+
+    const candidateIds = () => {
+      if (!lastCheckedFiles) return [];
+      const seenSequences = new Set();
+      const runnableFiles = lastCheckedFiles.filter((file) => {
+        if (file.error || file.ignoredForMethod) return false;
+        if (methodControl?.value === "alphafold2" && file.hasUnknownProteinResidue) return false;
+        if (unsupportedEntityTypes(file).length) return false;
+        if (file.sequenceKey && seenSequences.has(file.sequenceKey)) return false;
+        if (file.sequenceKey) seenSequences.add(file.sequenceKey);
+        return true;
+      });
+      return uniqueSampleIds(runnableFiles).filter(Boolean);
+    };
+    const listOutputNames = async (paths, signal) => {
+      const listings = await Promise.all([...new Set(paths)].map(async (path) => {
+        const response = await fetch(buildFilesUrl(path), {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          signal
+        });
+        if (response.status === 404) return [path, new Set()];
+        if (!response.ok) throw new Error(`Could not inspect existing outputs (${response.status}).`);
+        const listing = await response.json();
+        return [path, new Set((listing.files || []).map((entry) => entry.name))];
+      }));
+      return new Map(listings);
+    };
+    const checkOutputs = async (controller) => {
+      const ids = candidateIds();
+      const runName = runNameControl?.value.trim();
+      const outputRoot = outputRootControl?.value.trim();
+      if (!runName || !ids.length || !methodControl?.value || !outputRoot) {
+        renderOutputCheck("waiting", "Enter a run name and valid input to check existing outputs.");
+        return;
+      }
+      renderOutputCheck("checking", "Checking for existing outputs...");
+      try {
+        const locations = outputLocations(outputRoot, runName, methodControl.value, ids);
+        const namesByDirectory = await listOutputNames(
+          locations.flatMap(({ sampleDirectory, structuresDirectory }) => [
+            sampleDirectory,
+            structuresDirectory
+          ]),
+          controller.signal
+        );
+        const collisions = locations
+          .filter(({ sampleDirectory, sampleEntry, structuresDirectory, structureEntry }) =>
+            namesByDirectory.get(sampleDirectory)?.has(sampleEntry) ||
+            namesByDirectory.get(structuresDirectory)?.has(structureEntry)
+          )
+          .map(({ sampleId }) => sampleId);
+        if (collisions.length) {
+          renderOutputCheck(
+            "collision",
+            `Existing ${methodControl.value} outputs would be overwritten for input ID(s): ${collisions.join(", ")}. Change the run name, method, or input.`
+          );
+        } else {
+          renderOutputCheck("clear", "No outputs for this method and input combination would be overwritten.");
+        }
+      } catch (error) {
+        if (error.name !== "AbortError") renderOutputCheck("waiting", error.message);
+      }
+    };
+    const scheduleOutputCheck = () => {
+      outputController?.abort();
+      if (outputTimer) window.clearTimeout(outputTimer);
+      outputController = new AbortController();
+      outputTimer = window.setTimeout(() => checkOutputs(outputController), 250);
+    };
+
     const preflight = async (request, controller) => {
       const rawInput = input.value;
       const path = rawInput.trim();
       if (!path.startsWith("/")) {
         lastCheckedFiles = null;
-        render(analyseManualInput(rawInput));
+        const result = analyseManualInput(rawInput);
+        render(result);
+        const sequence = stripTerminalStops(removeWhitespace(rawInput));
+        if (result.severity !== "error" && sequence) {
+          lastCheckedFiles = [{ manualSequence: sequence }];
+        }
+        scheduleOutputCheck();
         return;
       }
 
@@ -1132,10 +1316,12 @@
         if (request !== requestNumber) return;
         lastCheckedFiles = checkedFiles;
         render(analyseFiles(checkedFiles));
+        scheduleOutputCheck();
       } catch (error) {
         if (error.name === "AbortError" || request !== requestNumber) return;
         lastCheckedFiles = null;
         render(errorResult(`Could not check this input: ${error.message}`));
+        scheduleOutputCheck();
       }
     };
 
@@ -1153,6 +1339,7 @@
     };
 
     input.addEventListener("input", schedulePreflight);
+    runNameControl?.addEventListener("input", scheduleOutputCheck);
     if (methodControl && methodControl.dataset.oodInputLengthBound !== "1") {
       methodControl.addEventListener("change", () => {
         const path = input.value.trim();
@@ -1164,6 +1351,7 @@
         } else {
           schedulePreflight();
         }
+        scheduleOutputCheck();
       });
       methodControl.dataset.oodInputLengthBound = "1";
     }
