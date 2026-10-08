@@ -91,9 +91,14 @@ rescue StandardError => e
 end
 
 def validate_shell_templates!(template_context)
-  Dir.glob(ROOT.join("template/*.sh.erb")).sort.each do |path|
-    rendered = render_template(path, template_context)
-    _stdout, stderr, status = Open3.capture3("bash", "-n", stdin_data: rendered)
+  sources = Dir.glob(ROOT.join("template/*.sh.erb")).sort.map do |path|
+    [path, render_template(path, template_context)]
+  end
+  Dir.glob(ROOT.join("template/*.sh")).sort.each do |path|
+    sources << [path, File.read(path)]
+  end
+  sources.each do |path, source|
+    _stdout, stderr, status = Open3.capture3("bash", "-n", stdin_data: source)
     next if status.success?
 
     relative_path = Pathname(path).relative_path_from(ROOT)
