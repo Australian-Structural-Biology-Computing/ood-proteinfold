@@ -43,7 +43,6 @@ RUN_STATE_DIR="${BASE_NXF_WORK}/${RUNNAME}"
 LAUNCH_DIR="${RUN_STATE_DIR}/launch"
 export NXF_WORK="${RUN_STATE_DIR}/work"
 SAMPLESHEET_STATE="${RUN_STATE_DIR}/samplesheet.path"
-COMPLETED_MARKER="${RUN_STATE_DIR}/.ood-completed"
 DEBUG_LOG="${OOD_SESSION_DIR}/debug.log"
 OUTPUT_LOG="${OOD_SESSION_DIR}/output.log"
 METRICS_FILE=""
@@ -66,16 +65,9 @@ exec 2>&1
 mkdir -p "${BASE_OUT_DIR}"
 mkdir -p "${OUT_DIR}"
 
-if [ -f "${COMPLETED_MARKER}" ]; then
-    echo "ProteinFold run ${RUNNAME} already completed successfully."
-    echo "Existing results: ${OUT_DIR}"
-    echo "Nothing was submitted to Nextflow. Start a new OOD session to run it again."
-    exit 0
-fi
-
 trap "collect_debug_files" ERR
 
-function collect_debug_files() {
+function collect_debug_files() (
     trap - ERR
     set +e
     echo "Error occurred, copying debug files to ${DEBUGDIR}"
@@ -87,7 +79,7 @@ function collect_debug_files() {
     # ignore per-file failures rather than masking the original exit code.
     find "$DEBUGDIR" -type d -exec chmod 2770 {} + 2>/dev/null || true
     find "$DEBUGDIR" -type f -exec chmod 660 {} + 2>/dev/null || true
-}
+)
 
 function write_completion_metrics() {
     local exit_status="$1"
@@ -110,6 +102,8 @@ source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
 # Native environment cacheDir used for caching blobs during image pulls
 export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
 export SINGULARITY_CACHEDIR="${SINGULARITY_CACHEDIR:-/srv/scratch/${USER}/.images}"
+export APPTAINER_TMPDIR="${APPTAINER_TMPDIR:-${TMPDIR:-/srv/scratch/${USER}/.images/tmp}}"
+export SINGULARITY_TMPDIR="${SINGULARITY_TMPDIR:-$APPTAINER_TMPDIR}"
 
 # Nextflow variables, checks libraryDir and if image is not found downloads to cache
 export NXF_APPTAINER_CACHEDIR="${NXF_APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
@@ -501,11 +495,9 @@ nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run "${PROJECT}" "${NEXTFLOW_REVISION_ARGS
     "${NEXTFLOW_RESUME_ARGS[@]}" \
     -profile apptainer
 
-# Render optional pLDDT previews without blocking the completion marker.
+# Render optional pLDDT previews without blocking the completed workflow.
 if [ "${GENERATE_PLDDT_PREVIEWS}" == "true" ]; then
     if ! python3 "${OOD_SESSION_DIR}/protein_mugshots.py" --out-dir "${OUT_DIR}" 2>>"${DEBUG_LOG}"; then
         echo "WARNING: pLDDT preview generation failed; ProteinFold results are unaffected." >&2
     fi
 fi
-
-touch "${COMPLETED_MARKER}"
