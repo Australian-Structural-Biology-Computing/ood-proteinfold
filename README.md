@@ -92,9 +92,8 @@ reuses the saved samplesheet and Nextflow state and starts Nextflow with
 `-resume`. Relaunch is available only while the original job card remains in
 Open OnDemand, so retry the run before the card expires. Do not start a new job
 with the same options to resume it: a new submission has different Nextflow
-state and is checked as a new run. After Nextflow completes successfully, a
-marker in the persistent run state prevents the job card from submitting the
-completed workflow again.
+state and is checked as a new run. Nextflow skips tasks already completed in
+its saved state and reruns failed or incomplete tasks.
 
 ### pLDDT mugshot images
 

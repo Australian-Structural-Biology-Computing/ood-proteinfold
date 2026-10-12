@@ -1,6 +1,36 @@
+<%
+require "open3"
+require "timeout"
+
+scratch_quota_warning = begin
+    Timeout.timeout(10) do
+        user = ENV.fetch("USER")
+        next unless user.match?(/\A[A-Za-z0-9._-]+\z/)
+        fileset = "user_#{user}"
+        stdout, _stderr, status = Open3.capture3(
+            "/usr/lpp/mmfs/bin/mmlsquota", "-Y", "-j", fileset, "kura_rfs2"
+        )
+        next unless status.success?
+        fields = stdout.lines.map { |line| line.chomp.split(":", -1) }
+                       .find { |row| row[2] == "0" && row[9] == fileset }
+        next unless fields
+        block_usage, block_limit, file_usage, file_limit =
+            fields.values_at(10, 12, 15, 17).map { |value| Integer(value, exception: false) }
+        next unless block_usage && file_usage && block_limit&.positive? && file_limit&.positive?
+        storage = 100.0 * block_usage / block_limit
+        files = 100.0 * file_usage / file_limit
+        { storage: storage, files: files } if storage > 80 || files > 80
+    end
+rescue StandardError
+    nil
+end
+%>
 form:
     - resume_id
     - ood_user
+<% if scratch_quota_warning %>
+    - scratch_quota_warning
+<% end %>
     - data_warning
     - samplesheet
     - samplesheet_help
@@ -34,6 +64,23 @@ attributes:
         widget: "hidden_field"
         cacheable: false
         value: "<%= ENV["USER"] %>"
+
+<% if scratch_quota_warning %>
+    scratch_quota_warning:
+        class: "d-none"
+        help: |
+            <div role="alert" style="padding: 1rem; margin-bottom: 1rem; background-color: #F8D7DA; border: 3px solid #B00020; border-radius: 0.25rem; color: #721C24; font-size: 1.1rem;">
+              <div style="font-size: 1.25rem; font-weight: bold; margin-bottom: 0.5rem;">&#9888; Scratch space almost full</div>
+<% if scratch_quota_warning[:storage]&.>(80.0) %>
+              <div><b>Storage usage: <%= scratch_quota_warning[:storage].round(1) %>%</b></div>
+<% end %>
+<% if scratch_quota_warning[:files]&.>(80.0) %>
+              <div><b>File count usage: <%= scratch_quota_warning[:files].round(1) %>%</b></div>
+              <div style="margin-top: 0.5rem;">Scratch space also limits how many files and folders you can have, regardless of their size. Large collections of small files can reach this limit even when storage capacity remains available.</div>
+<% end %>
+              <div style="margin-top: 0.5rem;"><b>Your job may fail if scratch space runs out.</b> Please remove or archive files you no longer need before submitting.</div>
+            </div>
+<% end %>
 
     data_warning:
         class: "d-none"
