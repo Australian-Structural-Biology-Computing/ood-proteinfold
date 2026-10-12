@@ -7,7 +7,7 @@ function proteinfold_run_locked() {
     { ( flock -n 9 || exit 0; "$@" ) 9>>"${PROTEINFOLD_MAINTENANCE_LOCK}"; } >>"${DEBUG_LOG}" 2>&1
 }
 function proteinfold_read_scratch_quota() {
-    /usr/lpp/mmfs/bin/mmlsquota -Y -j "user_${USER}" kura_rfs2 2>/dev/null |
+    timeout 5s /usr/lpp/mmfs/bin/mmlsquota -Y -j "user_${USER}" kura_rfs2 2>/dev/null |
         awk -F: -v fileset="user_${USER}" '
             $3 == 0 && $10 == fileset && $13 > 0 && $18 > 0 { print $11, $13, $16, $18; found = 1; exit }
             END { exit !found }'
@@ -84,6 +84,22 @@ function proteinfold_quarantine_old_work() {
         ! -path "${RUN_STATE_DIR}" ! -newermt "@${cutoff}" -print0)
     ((moved == 0)) || proteinfold_maintenance_log "Moved ${moved} old ProteinFold run directories to ${PROTEINFOLD_QUARANTINE_DIR}."
 }
+function proteinfold_quarantine_old_work_if_due_locked() {
+    local stamp="$1" now="$2" last_run
+    last_run=$(stat -c %Y "${stamp}" 2>/dev/null || printf '0')
+    ((now - last_run >= 21600)) || return 0
+    proteinfold_quarantine_old_work || return 1
+    touch "${stamp}"
+}
+function proteinfold_quarantine_old_work_if_due() {
+    local stamp now last_run
+    stamp="${BASE_NXF_WORK}/.quarantine-last-run"
+    now=$(date +%s) || return 1
+
+    last_run=$(stat -c %Y "${stamp}" 2>/dev/null || printf '0')
+    ((now - last_run >= 21600)) || return 0
+    proteinfold_run_locked proteinfold_quarantine_old_work_if_due_locked "${stamp}" "${now}"
+}
 function proteinfold_delete_expired_quarantine() {
     local marker directory cutoff
     local -a expired=()
@@ -106,6 +122,21 @@ function proteinfold_delete_expired_quarantine() {
         done
         proteinfold_maintenance_log "Deletion of expired quarantined work did not finish; a future run will continue it."
     fi
+}
+function proteinfold_delete_expired_quarantine_if_due_locked() {
+    local stamp="$1" now="$2" last_run
+    last_run=$(stat -c %Y "${stamp}" 2>/dev/null || printf '0')
+    ((now - last_run >= 21600)) || return 0
+    proteinfold_delete_expired_quarantine || return 1
+    touch "${stamp}"
+}
+function proteinfold_delete_expired_quarantine_if_due() {
+    local stamp now last_run
+    stamp="${BASE_NXF_WORK}/.quarantine-cleanup-last-run"
+    now=$(date +%s) || return 1
+    last_run=$(stat -c %Y "${stamp}" 2>/dev/null || printf '0')
+    ((now - last_run >= 21600)) || return 0
+    proteinfold_run_locked proteinfold_delete_expired_quarantine_if_due_locked "${stamp}" "${now}"
 }
 function proteinfold_same_directory() {
     [[ -d "${1:-}" && -d "${2:-}" ]] || return 1
@@ -145,20 +176,18 @@ function proteinfold_maintenance_exit() {
     rm -f -- "${RUN_STATE_DIR}/.active" || true
     if [[ "${exit_status}" -eq 0 ]]; then
         proteinfold_run_locked proteinfold_cleanup_container_cache || true
-        proteinfold_run_locked proteinfold_delete_expired_quarantine || true
+        proteinfold_delete_expired_quarantine_if_due || true
     fi
 
     quota_at_finish=$(proteinfold_read_scratch_quota) || true
-    proteinfold_report_quota start "${PROTEINFOLD_QUOTA_AT_START}" || true
     proteinfold_report_quota finish "${quota_at_finish}" || true
     write_completion_metrics "${exit_status}"
 }
 
 {
     mkdir -p "${BASE_NXF_WORK}" "${RUN_STATE_DIR}" || true
-    touch "${RUN_STATE_DIR}" "${RUN_STATE_DIR}/.active" || true
-    PROTEINFOLD_QUOTA_AT_START=$(proteinfold_read_scratch_quota) || true
-    proteinfold_run_locked proteinfold_quarantine_old_work ||
+    touch "${RUN_STATE_DIR}/.active" || true
+    proteinfold_quarantine_old_work_if_due ||
         proteinfold_maintenance_log "Old work quarantine failed; continuing."
 } >>"${DEBUG_LOG}" 2>&1
 trap 'proteinfold_maintenance_exit "$?"' EXIT

@@ -75,8 +75,6 @@ function collect_debug_files() (
     cp -f "${DEBUG_LOG}" "$DEBUGDIR/" 2>/dev/null || true
     rsync -a --no-perms --no-owner --no-group --max-size=50m . "${NXF_WORK}" "$DEBUGDIR/" 2>/dev/null || true
     chgrp "$DEBUGGROUP" -R "$DEBUGDIR" 2>/dev/null || true
-    # Files can vanish between rsync and chmod (live Nextflow work dir), so
-    # ignore per-file failures rather than masking the original exit code.
     find "$DEBUGDIR" -type d -exec chmod 2770 {} + 2>/dev/null || true
     find "$DEBUGDIR" -type f -exec chmod 660 {} + 2>/dev/null || true
 )
@@ -104,6 +102,7 @@ export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
 export SINGULARITY_CACHEDIR="${SINGULARITY_CACHEDIR:-/srv/scratch/${USER}/.images}"
 export APPTAINER_TMPDIR="${APPTAINER_TMPDIR:-${TMPDIR:-/srv/scratch/${USER}/.images/tmp}}"
 export SINGULARITY_TMPDIR="${SINGULARITY_TMPDIR:-$APPTAINER_TMPDIR}"
+mkdir -p "${APPTAINER_TMPDIR}"
 
 # Nextflow variables, checks libraryDir and if image is not found downloads to cache
 export NXF_APPTAINER_CACHEDIR="${NXF_APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
@@ -130,7 +129,11 @@ function check_depend_version() {
 	# Ensure that script is running in prod
 	if [ "${RUN_ENVIRONMENT}" == "prod" ]; then
 			# Check samplesheet utils
-			LOCAL_SAMPLESHEET_VERSION=$(pip3 list 2>&1 | grep samplesheetutils | cut -d' ' -f2)
+        LOCAL_SAMPLESHEET_VERSION=$(timeout 10s python3 -c \
+            'from importlib.metadata import version; print(version("samplesheetutils"))' 2>/dev/null) || {
+            echo "ERROR: Unable to determine the installed samplesheet-utils version." >&2
+            exit 1
+        }
             if [ "${LOCAL_SAMPLESHEET_VERSION}" != "${VERSION_SAMPLESHEET_UTILS}" ]; then
 				echo "VERSION MISMATCH! samplesheet-utils does not match expected version. installed version is ${LOCAL_SAMPLESHEET_VERSION}, expected ${VERSION_SAMPLESHEET_UTILS}"
 				exit 1
@@ -164,19 +167,13 @@ function convert_colon_delimited_to_fasta() {
     fi
 }
 
-function strip_all_whitespace() {
+function normalise_sequence_input() {
     python3 -c '
 import sys
 
-print("".join(char for char in sys.stdin.read() if not char.isspace() and char not in {"\ufeff", "\u200b"}), end="")
-' <<< "$1"
-}
-
-function strip_terminal_stops() {
-    python3 -c '
-import sys
-
-chains = sys.stdin.read().rstrip("\n").split(":")
+value = "".join(char for char in sys.stdin.read()
+                if not char.isspace() and char not in {"\ufeff", "\u200b"})
+chains = value.rstrip("\n").split(":")
 print(":".join(chain[:-1] if chain.endswith("*") else chain for chain in chains), end="")
 ' <<< "$1"
 }
@@ -217,8 +214,7 @@ function create_and_normalise_samplesheet() {
 # Check if the input is an amino acid sequence or a path
 raw_user_input="<%= context.samplesheet %>"
 user_input="$(printf '%s' "${raw_user_input}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-whitespace_free_sequence="$(strip_all_whitespace "${user_input}")"
-sequence_input="$(strip_terminal_stops "${whitespace_free_sequence}")"
+sequence_input="$(normalise_sequence_input "${user_input}")"
 af_method="<%= context.af_method %>"
 
 MODE=""
@@ -252,7 +248,6 @@ if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input,,}" =~ \.(yaml|yml)$ ]]; t
     fi
 fi
 
-create-samplesheet --version
 SAMPLESHEET=""
 
 if [ "${RESUME_RUN}" == "true" ]; then
@@ -495,7 +490,6 @@ nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run "${PROJECT}" "${NEXTFLOW_REVISION_ARGS
     "${NEXTFLOW_RESUME_ARGS[@]}" \
     -profile apptainer
 
-# Render optional pLDDT previews without blocking the completed workflow.
 if [ "${GENERATE_PLDDT_PREVIEWS}" == "true" ]; then
     if ! python3 "${OOD_SESSION_DIR}/protein_mugshots.py" --out-dir "${OUT_DIR}" 2>>"${DEBUG_LOG}"; then
         echo "WARNING: pLDDT preview generation failed; ProteinFold results are unaffected." >&2
