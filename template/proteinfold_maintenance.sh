@@ -52,7 +52,7 @@ function proteinfold_report_quota() {
 }
 function proteinfold_quarantine_old_work() {
     local run_dir run_dir_mtime activity_mtime name destination moved=0 cutoff lease_cutoff
-    cutoff=$(date -d '90 days ago' +%s) || return 1
+    cutoff=$(date -d '30 days ago' +%s) || return 1
     lease_cutoff=$(date -d '2 days ago' +%s) || return 1
 
     if [[ "$(stat -c %d "${BASE_NXF_WORK}")" != "$(stat -c %d "${BASE_OUT_DIR}")" ]]; then
