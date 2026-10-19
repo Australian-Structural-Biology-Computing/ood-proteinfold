@@ -43,7 +43,6 @@ RUN_STATE_DIR="${BASE_NXF_WORK}/${RUNNAME}"
 LAUNCH_DIR="${RUN_STATE_DIR}/launch"
 export NXF_WORK="${RUN_STATE_DIR}/work"
 SAMPLESHEET_STATE="${RUN_STATE_DIR}/samplesheet.path"
-COMPLETED_MARKER="${RUN_STATE_DIR}/.ood-completed"
 DEBUG_LOG="${OOD_SESSION_DIR}/debug.log"
 OUTPUT_LOG="${OOD_SESSION_DIR}/output.log"
 METRICS_FILE=""
@@ -66,24 +65,19 @@ exec 2>&1
 mkdir -p "${BASE_OUT_DIR}"
 mkdir -p "${OUT_DIR}"
 
-if [ -f "${COMPLETED_MARKER}" ]; then
-    echo "ProteinFold run ${RUNNAME} already completed successfully."
-    echo "Existing results: ${OUT_DIR}"
-    echo "Nothing was submitted to Nextflow. Start a new OOD session to run it again."
-    exit 0
-fi
-
 trap "collect_debug_files" ERR
 
-function collect_debug_files() {
+function collect_debug_files() (
+    trap - ERR
+    set +e
     echo "Error occurred, copying debug files to ${DEBUGDIR}"
     mkdir -p "$DEBUGDIR"
     cp -f "${DEBUG_LOG}" "$DEBUGDIR/" 2>/dev/null || true
-    rsync -a --no-perms --no-owner --no-group --max-size=50m . "${NXF_WORK}" "$DEBUGDIR/"
-    find "$DEBUGDIR" -type d -exec chmod 2770 {} +
-    find "$DEBUGDIR" -type f -exec chmod 660 {} +
-    chgrp "$DEBUGGROUP" -R "$DEBUGDIR"
-}
+    rsync -a --no-perms --no-owner --no-group --max-size=50m . "${NXF_WORK}" "$DEBUGDIR/" 2>/dev/null || true
+    chgrp "$DEBUGGROUP" -R "$DEBUGDIR" 2>/dev/null || true
+    find "$DEBUGDIR" -type d -exec chmod 2770 {} + 2>/dev/null || true
+    find "$DEBUGDIR" -type f -exec chmod 660 {} + 2>/dev/null || true
+)
 
 function write_completion_metrics() {
     local exit_status="$1"
@@ -97,6 +91,7 @@ function write_completion_metrics() {
 }
 
 trap 'write_completion_metrics "$?"' EXIT
+{ source "${OOD_SESSION_DIR}/proteinfold_maintenance.sh"; } >>"${DEBUG_LOG}" 2>&1 || printf '[ProteinFold maintenance] Unable to initialise maintenance; continuing.\n' >>"${DEBUG_LOG}"
 
 # Set dependency version numbers
 VERSION_SAMPLESHEET_UTILS="1.3.4"
@@ -105,6 +100,9 @@ source "${PROJECT_ROOT}/${RUN_ENVIRONMENT}/venv/bin/activate"
 # Native environment cacheDir used for caching blobs during image pulls
 export APPTAINER_CACHEDIR="${APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
 export SINGULARITY_CACHEDIR="${SINGULARITY_CACHEDIR:-/srv/scratch/${USER}/.images}"
+export APPTAINER_TMPDIR="${APPTAINER_TMPDIR:-${TMPDIR:-/srv/scratch/${USER}/.images/tmp}}"
+export SINGULARITY_TMPDIR="${SINGULARITY_TMPDIR:-$APPTAINER_TMPDIR}"
+mkdir -p "${APPTAINER_TMPDIR}"
 
 # Nextflow variables, checks libraryDir and if image is not found downloads to cache
 export NXF_APPTAINER_CACHEDIR="${NXF_APPTAINER_CACHEDIR:-/srv/scratch/${USER}/.images}"
@@ -131,7 +129,11 @@ function check_depend_version() {
 	# Ensure that script is running in prod
 	if [ "${RUN_ENVIRONMENT}" == "prod" ]; then
 			# Check samplesheet utils
-			LOCAL_SAMPLESHEET_VERSION=$(pip3 list 2>&1 | grep samplesheetutils | cut -d' ' -f2)
+        LOCAL_SAMPLESHEET_VERSION=$(timeout 10s python3 -c \
+            'from importlib.metadata import version; print(version("samplesheetutils"))' 2>/dev/null) || {
+            echo "ERROR: Unable to determine the installed samplesheet-utils version." >&2
+            exit 1
+        }
             if [ "${LOCAL_SAMPLESHEET_VERSION}" != "${VERSION_SAMPLESHEET_UTILS}" ]; then
 				echo "VERSION MISMATCH! samplesheet-utils does not match expected version. installed version is ${LOCAL_SAMPLESHEET_VERSION}, expected ${VERSION_SAMPLESHEET_UTILS}"
 				exit 1
@@ -165,19 +167,13 @@ function convert_colon_delimited_to_fasta() {
     fi
 }
 
-function strip_all_whitespace() {
+function normalise_sequence_input() {
     python3 -c '
 import sys
 
-print("".join(char for char in sys.stdin.read() if not char.isspace() and char not in {"\ufeff", "\u200b"}), end="")
-' <<< "$1"
-}
-
-function strip_terminal_stops() {
-    python3 -c '
-import sys
-
-chains = sys.stdin.read().rstrip("\n").split(":")
+value = "".join(char for char in sys.stdin.read()
+                if not char.isspace() and char not in {"\ufeff", "\u200b"})
+chains = value.rstrip("\n").split(":")
 print(":".join(chain[:-1] if chain.endswith("*") else chain for chain in chains), end="")
 ' <<< "$1"
 }
@@ -218,8 +214,7 @@ function create_and_normalise_samplesheet() {
 # Check if the input is an amino acid sequence or a path
 raw_user_input="<%= context.samplesheet %>"
 user_input="$(printf '%s' "${raw_user_input}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-whitespace_free_sequence="$(strip_all_whitespace "${user_input}")"
-sequence_input="$(strip_terminal_stops "${whitespace_free_sequence}")"
+sequence_input="$(normalise_sequence_input "${user_input}")"
 af_method="<%= context.af_method %>"
 
 MODE=""
@@ -253,7 +248,6 @@ if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input,,}" =~ \.(yaml|yml)$ ]]; t
     fi
 fi
 
-create-samplesheet --version
 SAMPLESHEET=""
 
 if [ "${RESUME_RUN}" == "true" ]; then
@@ -496,11 +490,8 @@ nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run "${PROJECT}" "${NEXTFLOW_REVISION_ARGS
     "${NEXTFLOW_RESUME_ARGS[@]}" \
     -profile apptainer
 
-# Render optional pLDDT previews without blocking the completion marker.
 if [ "${GENERATE_PLDDT_PREVIEWS}" == "true" ]; then
     if ! python3 "${OOD_SESSION_DIR}/protein_mugshots.py" --out-dir "${OUT_DIR}" 2>>"${DEBUG_LOG}"; then
         echo "WARNING: pLDDT preview generation failed; ProteinFold results are unaffected." >&2
     fi
 fi
-
-touch "${COMPLETED_MARKER}"
