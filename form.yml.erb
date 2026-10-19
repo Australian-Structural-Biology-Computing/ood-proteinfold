@@ -70,13 +70,14 @@ attributes:
         class: "d-none"
         help: |
             <div role="alert" style="padding: 1rem; margin-bottom: 1rem; background-color: #F8D7DA; border: 3px solid #B00020; border-radius: 0.25rem; color: #721C24; font-size: 1.1rem;">
-              <div style="font-size: 1.25rem; font-weight: bold; margin-bottom: 0.5rem;">&#9888; Scratch space almost full</div>
+              <div style="font-size: 1.25rem; font-weight: bold; margin-bottom: 0.5rem;">&#9888; Your scratch quota usage is above 80% of its limit</div>
 <% if scratch_quota_warning[:storage]&.>(80.0) %>
               <div><b>Storage usage: <%= scratch_quota_warning[:storage].round(1) %>%</b></div>
 <% end %>
 <% if scratch_quota_warning[:files]&.>(80.0) %>
               <div><b>File count usage: <%= scratch_quota_warning[:files].round(1) %>%</b></div>
               <div style="margin-top: 0.5rem;">Scratch space also limits how many files and folders you can have, regardless of their size. Large collections of small files can reach this limit even when storage capacity remains available.</div>
+              <div style="margin-top: 0.5rem;">If you suspect a particular directory contains many files, advanced users can inspect it with <code>du --inodes --max-depth=1 /path/to/suspected/directory</code>. This may be slow for large directories.</div>
 <% end %>
               <div style="margin-top: 0.5rem;"><b>Your job may fail if scratch space runs out.</b> Please remove or archive files you no longer need before submitting.</div>
             </div>

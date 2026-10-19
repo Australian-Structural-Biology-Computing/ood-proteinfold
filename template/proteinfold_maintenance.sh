@@ -37,7 +37,7 @@ function proteinfold_report_quota() {
     remaining=$((file_limit - file_usage))
     ((remaining > 0)) || remaining=0
     printf '\n===============================================================\n'
-    printf 'WARNING: Your scratch space is more than 80%% full.\n'
+    printf 'WARNING: Your scratch quota usage is above 80%% of its limit.\n'
     if ((100 * block_usage > 80 * block_limit)); then
         printf 'Storage usage: %d.%d%%\n' "$((block_tenths / 10))" "$((block_tenths % 10))"
     fi
@@ -47,13 +47,13 @@ function proteinfold_report_quota() {
         printf 'Scratch limits both storage and the number of files and folders.\n'
         printf 'Large collections of small files can reach the file-count limit.\n'
     fi
-    printf 'Future jobs may fail unless unneeded scratch files are removed.\n'
+    printf 'Future jobs may fail unless unneeded scratch files are removed or archived.\n'
     printf '===============================================================\n\n'
 }
 function proteinfold_quarantine_old_work() {
     local run_dir run_dir_mtime activity_mtime name destination moved=0 cutoff lease_cutoff
     cutoff=$(date -d '30 days ago' +%s) || return 1
-    lease_cutoff=$(date -d '2 days ago' +%s) || return 1
+    lease_cutoff=$(date -d '100 hours ago' +%s) || return 1
 
     if [[ "$(stat -c %d "${BASE_NXF_WORK}")" != "$(stat -c %d "${BASE_OUT_DIR}")" ]]; then
         proteinfold_maintenance_log "Work and output directories are on different filesystems; skipping quarantine."
