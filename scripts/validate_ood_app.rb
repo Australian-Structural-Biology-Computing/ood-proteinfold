@@ -18,6 +18,7 @@ REQUIRED_FILES = %w[
   template/script.sh.erb
   template/sanitise_input.py
   template/protein_mugshots.py
+  template/pae_mugshots.py
 ].freeze
 
 class TemplateContext

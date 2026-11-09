@@ -12,6 +12,11 @@ import subprocess
 import sys
 import urllib.parse
 
+try:
+    import pae_mugshots
+except ImportError:
+    pae_mugshots = None
+
 TOP_RANKED_DIR = "top_ranked_structures"
 STRUCTURE_SUFFIXES = (".pdb", ".cif", ".mmcif")
 PNG_SUFFIX = "_plddt_mugshot.png"
@@ -29,6 +34,8 @@ DEFAULT_HEIGHT = 400
 DEFAULT_TIMEOUT = 3600
 DEFAULT_THREADS = 2
 WEBP_QUALITY = 90
+PAE_GRADIENT = pae_mugshots.CSS_GRADIENT if pae_mugshots else "#ccc"
+PAE_MAX = pae_mugshots.PAE_MAX if pae_mugshots else 30.0
 
 BANDS = (
     ("af_plddt_very_high", (0.0000, 0.3255, 0.8392), "b > 89.9999"),
@@ -50,6 +57,10 @@ MANIFEST_FIELDS = (
     "renderer_version",
     "elapsed_seconds",
     "png_bytes",
+    "pae_png",
+    "pae_status",
+    "pae_source",
+    "pae_error",
 )
 
 RESULT = "MUGSHOT_RESULT"
@@ -138,6 +149,7 @@ def plan(candidates):
             "panels": (),
             "render_path": "",
             "preview": "",
+            "pae": ("", "", "", ""),
         }
         if valid_png(target):
             task["status"] = "skipped"
@@ -440,6 +452,10 @@ def write_manifest(directory, tasks, renderer, version):
                         "renderer_version": version,
                         "elapsed_seconds": task["elapsed"],
                         "png_bytes": task["png_bytes"],
+                        "pae_png": task["pae"][1],
+                        "pae_status": task["pae"][0],
+                        "pae_source": task["pae"][2],
+                        "pae_error": task["pae"][3].replace("\t", " ").replace("\n", " "),
                     }
                 )
         os.replace(temporary, path)
@@ -458,8 +474,8 @@ def write_index(directory, tasks):
     summary = ", ".join("%s=%d" % item for item in sorted(counts.items())) or "none"
     parts = [
         "<!doctype html><html><head><meta charset='utf-8'><title>ProteinFold pLDDT mugshots</title>",
-        "<style>body{font-family:system-ui,sans-serif;margin:1rem;background:#eee;color:#222}.card{background:#fff;margin:0 0 .75rem;padding:.5rem;border:1px solid #bbb;border-radius:6px}.card h2{font-size:1rem;margin:.1rem 0 .4rem}.card img{display:block;width:100%;max-width:1200px;height:auto}.meta{font-family:monospace;font-size:.8rem;margin-top:.35rem;color:#555;overflow-wrap:anywhere}.legend{display:flex;gap:.6rem 1.1rem;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid #bbb;border-radius:6px;padding:.65rem .8rem;margin:.5rem 0 1rem;width:fit-content}.band{display:flex;gap:.4rem;align-items:center}.swatch{width:2rem;height:1rem;border:1px solid #777}.bad{color:#a00}</style></head><body>",
-        "<h1>ProteinFold pLDDT mugshots</h1><p>Front, side, and top views. Outcomes: %s.</p>" % html.escape(summary),
+        "<style>body{font-family:system-ui,sans-serif;margin:1rem;background:#eee;color:#222}.card{background:#fff;margin:0 0 .75rem;padding:.5rem;border:1px solid #bbb;border-radius:6px}.card h2{font-size:1rem;margin:.1rem 0 .4rem}.card img{display:block;width:100%;height:auto}.row{display:grid;grid-template-columns:3fr 1fr;gap:.5rem;max-width:1600px;align-items:start}.row.single{grid-template-columns:1fr;max-width:1200px}.pae figcaption{font-size:.75rem;color:#555;margin-top:.2rem}.pae{margin:0}.bar{height:.6rem;border:1px solid #777;background:PAE_GRADIENT}.barlabels{display:flex;justify-content:space-between;font-size:.7rem;color:#555}@media(max-width:800px){.row{grid-template-columns:1fr}}.meta{font-family:monospace;font-size:.8rem;margin-top:.35rem;color:#555;overflow-wrap:anywhere}.legend{display:flex;gap:.6rem 1.1rem;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid #bbb;border-radius:6px;padding:.65rem .8rem;margin:.5rem 0 1rem;width:fit-content}.band{display:flex;gap:.4rem;align-items:center}.swatch{width:2rem;height:1rem;border:1px solid #777}.bad{color:#a00}</style></head><body>".replace("PAE_GRADIENT", PAE_GRADIENT),
+        "<h1>ProteinFold pLDDT mugshots</h1><p>Front, side, and top views, with the predicted aligned error (PAE) plot of the top-ranked model alongside where available. Outcomes: %s.</p>" % html.escape(summary),
         "<div class='legend'><strong>pLDDT confidence</strong><span class='band'><i class='swatch' style='background:#0053D6'></i>&ge;90 very high</span><span class='band'><i class='swatch' style='background:#65CBF3'></i>70&ndash;&lt;90 confident</span><span class='band'><i class='swatch' style='background:#FFDB13'></i>50&ndash;&lt;70 low</span><span class='band'><i class='swatch' style='background:#FF7D45'></i>&lt;50 very low</span></div>",
     ]
     temporary = ""
@@ -479,11 +495,25 @@ def write_index(directory, tasks):
                     )
             else:
                 image = "<p class='bad'>%s</p>" % html.escape(task["error"] or task["skip_reason"])
+            pae = ""
+            pae_status, pae_png = task["pae"][0], task["pae"][1]
+            if pae_status in ("rendered", "skipped") and valid_png(pae_png):
+                with open(pae_png, "rb") as handle:
+                    pae = (
+                        "<figure class='pae'><img loading='lazy' src='data:image/png;base64,%s' alt='PAE %s'>"
+                        "<figcaption>Predicted aligned error, top-ranked model (&Aring;)"
+                        "<div class='bar'></div><div class='barlabels'><span>0</span><span>%d+</span></div>"
+                        "</figcaption></figure>"
+                    ) % (
+                        base64.b64encode(handle.read()).decode("ascii"),
+                        html.escape(candidate["stem"], quote=True),
+                        int(PAE_MAX),
+                    )
             source = urllib.parse.quote(os.path.relpath(candidate["path"], directory))
             parts.append(
-                "<section class='card'><h2>%s</h2>%s<div class='meta'>%s · %s · <a href='%s'>source</a></div></section>"
+                "<section class='card'><h2>%s</h2><div class='row%s'><div>%s</div>%s</div><div class='meta'>%s · %s · <a href='%s'>source</a></div></section>"
                 % (
-                    html.escape(candidate["relative"]), image,
+                    html.escape(candidate["relative"]), "" if pae else " single", image, pae,
                     html.escape(candidate["method"]), html.escape(task["status"]), source,
                 )
             )
@@ -504,6 +534,35 @@ def write_index(directory, tasks):
             os.unlink(temporary)
         except OSError:
             pass
+
+
+def render_pae_plots(tasks):
+    """Render a PAE plot beside each structure; returns how many were newly drawn."""
+    created = 0
+    for task in tasks:
+        if pae_mugshots is None:
+            break
+        try:
+            task["pae"] = pae_mugshots.render_pae(task["candidate"]["path"])
+        except Exception as error:
+            task["pae"] = ("failed", "", "", str(error)[:500])
+        status, _, _, detail = task["pae"]
+        if status == "rendered":
+            created += 1
+        elif status == "failed":
+            debug("PAE plot failed for %s: %s" % (task["candidate"]["relative"], detail))
+    return created
+
+
+def pae_missing_from(index_path, tasks):
+    """True when PAE plots exist but the previously written gallery does not show them."""
+    if not any(task["pae"][0] in ("rendered", "skipped") for task in tasks):
+        return False
+    try:
+        with open(index_path, "r") as handle:
+            return "class='pae'" not in handle.read()
+    except OSError:
+        return True
 
 
 def run(args):
@@ -530,12 +589,17 @@ def run(args):
         for task in tasks:
             if task["status"] == "pending":
                 fail(task, "driver_failed", str(error))
+    pae_rendered = render_pae_plots(tasks)
+    if reuse_index and (pae_rendered or pae_missing_from(existing_index, tasks)):
+        reuse_index = False
     manifest = write_manifest(manifest_dir, tasks, renderer, version)
     index = existing_index if reuse_index else write_index(manifest_dir, tasks)
     rendered = sum(task["status"] == "rendered" for task in tasks)
     skipped = sum(task["status"] == "skipped" for task in tasks)
     failed = sum(task["status"] == "failed" for task in tasks)
     log("pLDDT previews complete: %d created, %d reused, %d failed." % (rendered, skipped, failed))
+    paes = sum(task["pae"][0] in ("rendered", "skipped") for task in tasks)
+    log("PAE plots available for %d of %d structures." % (paes, len(tasks)))
     for task in tasks:
         if task["status"] == "failed":
             debug("FAILED %s: %s" % (task["candidate"]["relative"], task["error"]))
