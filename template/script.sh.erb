@@ -296,6 +296,7 @@ elif [ "${MODE}" == "FASTA_INPUT" ]; then
 elif [ "${MODE}" == "DIRECTORY" ]; then
     mkdir -p fasta
     working_dir=$(pwd)
+    : > "${working_dir}/msa_staged_names.bin"
     cd "${user_input}"
     for filename in *
     do
@@ -321,6 +322,7 @@ elif [ "${MODE}" == "DIRECTORY" ]; then
             staged_name="${basename}-${suffix}.${extension}"
         fi
         cp "${filename}" "$working_dir/fasta/${staged_name}"
+        printf '%s\0%s\0' "${staged_name}" "${filename}" >> "$working_dir/msa_staged_names.bin"
     done
 
     cd ${working_dir}
@@ -344,6 +346,13 @@ fi
 
 PIPELINE_MODE=""
 ARGS="--db ${DB_PATH}"
+MSA_INPUT="<%= context.msa %>"
+
+if [ "${af_method}" == "colabfold" ] && [ "${RESUME_RUN}" == "false" ]; then
+    python3 "${OOD_SESSION_DIR}/attach_msa.py" "${SAMPLESHEET}" "$(pwd)/colabfold_samplesheet.csv" "${user_input}" "${MODE}" "${MSA_INPUT}" "$(pwd)/msa_staged_names.bin"
+    SAMPLESHEET="$(pwd)/colabfold_samplesheet.csv"
+    printf '%s\n' "${SAMPLESHEET}" > "${SAMPLESHEET_STATE}"
+fi
 NEXTFLOW_CONFIG_ARGS=("-c" "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config")
 COLABFOLD_RECYCLES="<%= context.colabfold_num_recycles %>"
 COLABFOLD_NUM_SEEDS="<%= context.colabfold_num_seeds %>"

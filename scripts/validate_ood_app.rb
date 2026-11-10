@@ -17,6 +17,7 @@ REQUIRED_FILES = %w[
   view.html.erb
   template/script.sh.erb
   template/sanitise_input.py
+  template/attach_msa.py
   template/protein_mugshots.py
 ].freeze
 
