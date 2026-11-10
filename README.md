@@ -23,6 +23,7 @@
 - `template/script.sh.erb`: Main job script for running predictions.
 - `template/sanitise_input.py`: Validates and normalises staged FASTA and samplesheet inputs.
 - `template/protein_mugshots.py`: Optional batch renderer for pLDDT mugshot images and the standalone gallery.
+- `template/pae_mugshots.py`: Renders PAE plots from the published `*_pae.tsv` files; used by `protein_mugshots.py`.
 - `submit.yml.erb`: Job submission configuration.
 - `info.html.erb`: Displays result links after job completion.
 - `.github/workflows/`: CI/CD deployment workflows.
@@ -118,6 +119,10 @@ Set the deployed image path in `template/.env` when it differs from the default:
 ```bash
 MUGSHOT_RENDERER_IMAGE="${SHARED_CONTAINER_DIR}/jysgro-pymol-3.1.0-amd64-ab2facf7869c.sif"
 ```
+
+### PAE plots
+
+`template/pae_mugshots.py` draws a 400×400 PAE plot for each structure in `top_ranked_structures/`, shown to the right of its mugshot in the gallery. It reads the lowest-ranked-number `<id>_<rank>_pae.tsv` from `<method>/<id>/paes/` (for AlphaFold2, `alphafold2/<mode>/<id>/paes/`), the matrix published for the top-ranked model, and writes `<structure-stem>_pae.png` beside the structure. The plot uses the AlphaFold database green scale, 0–30 Å, and needs only the Python standard library. Structures without a usable PAE file (for example ESMFold, monomer runs, or empty files) simply show no plot, and `mugshot_manifest.tsv` records `pae_status`. A plot is redrawn when its TSV is newer. The script can also run alone: `python3 pae_mugshots.py --out-dir <OUT_DIR>`.
 
 ### Python Environment for samplesheet-utils
 
