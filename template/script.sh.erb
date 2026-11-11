@@ -96,8 +96,7 @@ function send_failure_email() (
         printf 'Node:       %s\n\n' "$(hostname)"
         printf 'Debug dir:  %s\n' "${DEBUGDIR}"
         printf 'Debug link: %s/pun/sys/dashboard/files/fs%s\n' "${ood_url}" "${DEBUGDIR}"
-        printf 'Session ID: %s\n' "$(basename "${OOD_SESSION_DIR}")"
-        printf 'OOD sessions (owner only): %s/pun/sys/dashboard/batch_connect/sessions\n\n' "${ood_url}"
+        printf 'Session ID: %s\n\n' "$(basename "${OOD_SESSION_DIR}")"
         printf -- '--- PBS resources ---\n'
         if [[ -n "${PBS_JOBID:-}" ]]; then
             timeout 20 qstat -f "${PBS_JOBID}" 2>/dev/null \
