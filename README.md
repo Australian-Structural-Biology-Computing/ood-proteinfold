@@ -72,6 +72,15 @@ DEBUGGROUP=sbf-pipelines
 # Base debug directory (job-specific DEBUGDIR set at runtime)
 BASE_DEBUGDIR=/srv/scratch/sbf/debug
 
+# Address emailed only when the failure handler captures a failed run: app,
+# user zID, run, exit code, PBS resources, debug path and Files-app link,
+# session ID and the tail of debug.log. Defaults to sbf@unsw.edu.au; set empty
+# to disable.
+FAILURE_EMAIL=sbf@unsw.edu.au
+
+# OnDemand base URL used for links in the failure email
+#OOD_BASE_URL=https://kod.restech.unsw.edu.au
+
 # Nextflow state directory base. Each new OOD launch gets a timestamped
 # subdirectory containing persistent launch/cache, work, and prepared input
 # state; OOD Relaunch reuses that subdirectory and enables Nextflow -resume.
