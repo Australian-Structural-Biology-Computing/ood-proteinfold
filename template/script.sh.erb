@@ -78,6 +78,7 @@ function send_failure_email() (
     read -r -a stack_lines <<< "${5-}"
     local ood_url="${OOD_BASE_URL:-https://kod.restech.unsw.edu.au}"
     local mail_from="${FAILURE_EMAIL_FROM:-${USER}@ad.unsw.edu.au}"
+    local msg="${DEBUGDIR}/failure-email.eml" mail_log="${DEBUGDIR}/failure-email.log"
     {
         printf 'ProteinFold job failed.\n\n'
         printf 'App:        ProteinFold\n'
@@ -108,9 +109,12 @@ function send_failure_email() (
         fi
         printf '\n--- Last 50 lines of debug.log ---\n'
         tail -n 50 "${DEBUG_LOG}" 2>/dev/null
-    } | { printf 'From: %s\nTo: %s\nSubject: %s\n\n' "${mail_from}" "${FAILURE_EMAIL}" "[ProteinFold] Job failed: ${RUNNAME} (${USER})"; cat; } \
-        | msmtp --host="${SMTP_HOST:-smtp.unsw.edu.au}" --port=25 --tls=off --auth=off --from="${mail_from}" "${FAILURE_EMAIL}" \
-            >> "${DEBUGDIR}/failure-email.log" 2>&1
+    } | { printf 'From: %s\nTo: %s\nSubject: %s\n\n' "${mail_from}" "${FAILURE_EMAIL}" "[ProteinFold] Job failed: ${RUNNAME} (${USER})"; cat; } > "${msg}"
+    local -a relay=(--host="${SMTP_HOST:-smtp.unsw.edu.au}" --port=25 --auth=off --from="${mail_from}")
+    # STARTTLS first; the message is kept in ${msg} so a plain-text retry can resend it.
+    msmtp "${relay[@]}" --tls=on --tls-starttls=on --tls-trust-file="${SMTP_CA_FILE:-/etc/pki/tls/certs/ca-bundle.crt}" \
+        "${FAILURE_EMAIL}" < "${msg}" >> "${mail_log}" 2>&1 \
+        || { echo "TLS send failed; retrying without TLS" >> "${mail_log}"; msmtp "${relay[@]}" --tls=off "${FAILURE_EMAIL}" < "${msg}" >> "${mail_log}" 2>&1; }
     exit 0
 )
 

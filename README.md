@@ -83,9 +83,11 @@ FAILURE_EMAIL=sbf@unsw.edu.au
 #OOD_BASE_URL=https://kod.restech.unsw.edu.au
 
 # The email is sent with msmtp directly through the UNSW relay, because compute
-# nodes have no msmtp config for mail(1). Override if needed; send errors are
-# logged to <debug dir>/failure-email.log.
+# nodes have no msmtp config for mail(1). It uses STARTTLS on port 25 and falls
+# back to plain text if TLS fails. Override if needed; send errors are logged to
+# <debug dir>/failure-email.log.
 #SMTP_HOST=smtp.unsw.edu.au
+#SMTP_CA_FILE=/etc/pki/tls/certs/ca-bundle.crt
 #FAILURE_EMAIL_FROM=<zID>@ad.unsw.edu.au
 
 # Nextflow state directory base. Each new OOD launch gets a timestamped
