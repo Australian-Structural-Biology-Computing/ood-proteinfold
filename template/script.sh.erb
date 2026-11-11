@@ -66,13 +66,16 @@ exec 2>&1
 mkdir -p "${BASE_OUT_DIR}"
 mkdir -p "${OUT_DIR}"
 
-trap "collect_debug_files" ERR
+trap 'collect_debug_files "${LINENO}" "${BASH_COMMAND}" "${FUNCNAME[*]-}" "${BASH_LINENO[*]-}"' ERR
 
 function send_failure_email() (
     trap - ERR
     set +e +x
     [[ -n "${FAILURE_EMAIL}" ]] || exit 0
-    local exit_code="$1"
+    local exit_code="$1" fail_line="${2:-unknown}" fail_cmd="${3:-unknown}"
+    local -a stack_funcs stack_lines
+    read -r -a stack_funcs <<< "${4-}"
+    read -r -a stack_lines <<< "${5-}"
     local ood_url="${OOD_BASE_URL:-https://kod.restech.unsw.edu.au}"
     {
         printf 'ProteinFold job failed.\n\n'
@@ -81,6 +84,13 @@ function send_failure_email() (
         printf 'Run:        %s\n' "${RUNNAME}"
         printf 'Failed at:  %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
         printf 'Exit code:  %s\n' "${exit_code}"
+        printf 'Location:   line %s of the job script (script.sh in the debug dir)\n' "${fail_line}"
+        printf 'Command:    %s\n' "${fail_cmd}"
+        local i
+        for i in "${!stack_funcs[@]}"; do
+            [[ "${stack_funcs[$i]}" == "main" ]] && continue
+            printf '  in %s, called from line %s\n' "${stack_funcs[$i]}" "${stack_lines[$i]:-?}"
+        done
         printf 'PBS job:    %s\n' "${PBS_JOBID:-unknown}"
         printf 'Node:       %s\n\n' "$(hostname)"
         printf 'Debug dir:  %s\n' "${DEBUGDIR}"
@@ -106,10 +116,11 @@ function collect_debug_files() (
     local exit_code=$?
     trap - ERR
     set +e
+    local fail_line="${1:-unknown}" fail_cmd="${2:-unknown}"
     echo "Error occurred, copying debug files to ${DEBUGDIR}"
     mkdir -p "$DEBUGDIR"
     cp -f "${DEBUG_LOG}" "$DEBUGDIR/" 2>/dev/null || true
-    send_failure_email "${exit_code}"
+    send_failure_email "${exit_code}" "${fail_line}" "${fail_cmd}" "${3-}" "${4-}"
     rsync -a --no-perms --no-owner --no-group --max-size=50m . "${NXF_WORK}" "$DEBUGDIR/" 2>/dev/null || true
     chgrp "$DEBUGGROUP" -R "$DEBUGDIR" 2>/dev/null || true
     find "$DEBUGDIR" -type d -exec chmod 2770 {} + 2>/dev/null || true
