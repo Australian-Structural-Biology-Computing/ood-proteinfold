@@ -77,6 +77,7 @@ function send_failure_email() (
     read -r -a stack_funcs <<< "${4-}"
     read -r -a stack_lines <<< "${5-}"
     local ood_url="${OOD_BASE_URL:-https://kod.restech.unsw.edu.au}"
+    local mail_from="${FAILURE_EMAIL_FROM:-${USER}@ad.unsw.edu.au}"
     {
         printf 'ProteinFold job failed.\n\n'
         printf 'App:        ProteinFold\n'
@@ -108,7 +109,9 @@ function send_failure_email() (
         fi
         printf '\n--- Last 50 lines of debug.log ---\n'
         tail -n 50 "${DEBUG_LOG}" 2>/dev/null
-    } | mail -s "[ProteinFold] Job failed: ${RUNNAME} (${USER})" "${FAILURE_EMAIL}" >/dev/null 2>&1
+    } | { printf 'From: %s\nTo: %s\nSubject: %s\n\n' "${mail_from}" "${FAILURE_EMAIL}" "[ProteinFold] Job failed: ${RUNNAME} (${USER})"; cat; } \
+        | msmtp --host="${SMTP_HOST:-smtp.unsw.edu.au}" --port=25 --tls=off --auth=off --from="${mail_from}" "${FAILURE_EMAIL}" \
+            >> "${DEBUGDIR}/failure-email.log" 2>&1
     exit 0
 )
 

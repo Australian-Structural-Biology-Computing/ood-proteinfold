@@ -82,6 +82,12 @@ FAILURE_EMAIL=sbf@unsw.edu.au
 # OnDemand base URL used for links in the failure email
 #OOD_BASE_URL=https://kod.restech.unsw.edu.au
 
+# The email is sent with msmtp directly through the UNSW relay, because compute
+# nodes have no msmtp config for mail(1). Override if needed; send errors are
+# logged to <debug dir>/failure-email.log.
+#SMTP_HOST=smtp.unsw.edu.au
+#FAILURE_EMAIL_FROM=<zID>@ad.unsw.edu.au
+
 # Nextflow state directory base. Each new OOD launch gets a timestamped
 # subdirectory containing persistent launch/cache, work, and prepared input
 # state; OOD Relaunch reuses that subdirectory and enables Nextflow -resume.
