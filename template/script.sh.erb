@@ -112,7 +112,7 @@ function send_failure_email() (
     } | { printf 'From: %s\nTo: %s\nSubject: %s\n\n' "${mail_from}" "${FAILURE_EMAIL}" "[ProteinFold] Job failed: ${RUNNAME} (${USER})"; cat; } > "${msg}"
     local -a relay=(--host="${SMTP_HOST:-smtp.unsw.edu.au}" --port=25 --auth=off --from="${mail_from}")
     # STARTTLS first; the message is kept in ${msg} so a plain-text retry can resend it.
-    msmtp "${relay[@]}" --tls=on --tls-starttls=on --tls-trust-file="${SMTP_CA_FILE:-/etc/pki/tls/certs/ca-bundle.crt}" \
+    timeout 10 msmtp "${relay[@]}" --tls=on --tls-starttls=on --tls-trust-file="${SMTP_CA_FILE:-/etc/pki/tls/certs/ca-bundle.crt}" \
         "${FAILURE_EMAIL}" < "${msg}" >> "${mail_log}" 2>&1 \
         || { echo "TLS send failed; retrying without TLS" >> "${mail_log}"; msmtp "${relay[@]}" --tls=off "${FAILURE_EMAIL}" < "${msg}" >> "${mail_log}" 2>&1; }
     exit 0
