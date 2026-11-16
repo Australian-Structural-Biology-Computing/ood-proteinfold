@@ -41,6 +41,7 @@ form:
     - full_dbs
     - random_seed
     - colabfold_num_recycles
+    - esmfold2_model
     - colabfold_advanced_options
     - colabfold_max_msa
     - colabfold_num_seeds
@@ -127,13 +128,22 @@ attributes:
                 <li><b>AlphaFold3</b> High accuracy, Restricted use - <a href="https://doi.org/10.1038/s41586-024-07487-w">AlphaFold3 paper</a></li>
                 <li><b>ColabFold</b> High accuracy - <a href="https://doi.org/10.1038/s41592-022-01488-1">ColabFold paper</a></li>
                 <li><b>ESMFold</b> Medium/Low accuracy, Fastest; No evolutionary sequence calculations - <a href="https://doi.org/10.1126/science.ade2574">ESMFold paper</a></li>
+                <li><b>Protenix2, Chai1, IntelliFold2, OpenDDE, OpenFold3, OpenBind0, RosettaFold3, and ESMFold2</b> Experimental ColabFold2 backends - <a href="https://github.com/Australian-Structural-Biology-Computing/proteinfold/blob/dev/docs/usage/colabfold2.md">ColabFold2 guide</a></li>
             </ul>
         options:
-            - ["Boltz", "boltz", {data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
-            - ["AlphaFold2", "alphafold2", {data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
-            - ["AlphaFold3", "alphafold3", {data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true}]
-            - ["ColabFold", "colabfold", {data-hide-full_dbs: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
-            - ["ESMFold", "esmfold", {data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["Boltz", "boltz", {data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-af3_weights: true, data-hide-af3_warning: true, data-hide-esmfold2_model: true}]
+            - ["AlphaFold2", "alphafold2", {data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true, data-hide-esmfold2_model: true}]
+            - ["AlphaFold3", "alphafold3", {data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-esmfold2_model: true}]
+            - ["ColabFold", "colabfold", {data-hide-full_dbs: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true, data-hide-esmfold2_model: true}]
+            - ["ESMFold", "esmfold", {data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true, data-hide-esmfold2_model: true}]
+            - ["Protenix2", "protenix2", {data-hide-full_dbs: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true, data-hide-esmfold2_model: true}]
+            - ["Chai1", "chai1", {data-hide-full_dbs: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true, data-hide-esmfold2_model: true}]
+            - ["IntelliFold2", "intellifold2", {data-hide-full_dbs: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true, data-hide-esmfold2_model: true}]
+            - ["OpenDDE", "opendde", {data-hide-full_dbs: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true, data-hide-esmfold2_model: true}]
+            - ["OpenFold3", "openfold3", {data-hide-full_dbs: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true, data-hide-esmfold2_model: true}]
+            - ["OpenBind0", "openbind0", {data-hide-full_dbs: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true, data-hide-esmfold2_model: true}]
+            - ["RosettaFold3", "rosettafold3", {data-hide-full_dbs: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true, data-hide-esmfold2_model: true}]
+            - ["ESMFold2", "esmfold2", {data-hide-full_dbs: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
         display: true
 
     af3_weights:
@@ -177,6 +187,14 @@ attributes:
         max: 20
         help: |
             Higher values may improve quality but increase runtime.
+
+    esmfold2_model:
+        widget: "select"
+        label: "ESMFold2 Model"
+        options:
+            - ["msa", "msa"]
+            - ["lm300m", "lm300m"]
+            - ["lm600m", "lm600m"]
 
     colabfold_advanced_options:
         widget: "check_box"

@@ -33,6 +33,7 @@ class TemplateContext
       af3_weights: "",
       full_dbs: "reduced",
       colabfold_num_recycles: 3,
+      esmfold2_model: "msa",
       colabfold_advanced_options: "",
       colabfold_max_msa: "512:1024",
       colabfold_num_seeds: 1,

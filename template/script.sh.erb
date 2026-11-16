@@ -412,7 +412,7 @@ AF3_WEIGHTS="<%= context.af3_weights %>"
 
 # UI enforces this when ColabFold advanced sampling is active, but keep the
 # server-side override as a fallback in case the form state is inconsistent.
-if [ "<%= context.colabfold_advanced_options %>" == "yes" ]; then
+if [ "${af_method}" == "colabfold" ] && [ "<%= context.colabfold_advanced_options %>" == "yes" ]; then
     SAVE_INTERMEDIATES="true"
 fi
 
@@ -489,6 +489,21 @@ EOF
         NEXTFLOW_CONFIG_ARGS+=("-c" "${OOD_COLABFOLD_CONFIG}")
     fi
 fi
+
+case "${af_method}" in
+    colabfold2-alphafold3|colabfold2-boltz2|esmfold2|protenix2|chai1|intellifold2|opendde|openfold3|openbind0|rosettafold3)
+        PIPELINE_MODE="${af_method}"
+        if [ -n "${COLABFOLD_RECYCLES}" ]; then
+            ARGS="${ARGS} --colabfold_num_recycles ${COLABFOLD_RECYCLES}"
+        fi
+        if [ "${af_method}" == "esmfold2" ]; then
+            case "<%= context.esmfold2_model %>" in
+                msa|lm300m|lm600m) ARGS="${ARGS} --esmfold2_model <%= context.esmfold2_model %>" ;;
+                *) echo "ERROR: Invalid ESMFold2 model." >&2; exit 1 ;;
+            esac
+        fi
+        ;;
+esac
 
 if [ "<%= context.af_method %>" == "esmfold" ]; then
     PIPELINE_MODE="esmfold"
