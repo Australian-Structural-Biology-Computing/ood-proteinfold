@@ -34,6 +34,7 @@ form:
     - data_warning
     - samplesheet
     - samplesheet_help
+    - msa
     - run_name
     - af_method
     - af3_weights
@@ -104,6 +105,14 @@ attributes:
             <br>• <b>Single file:</b> <code>protein.fasta</code>, <code>protein.yaml</code>, or <code>samplesheet.csv</code>
             <br>• <b>Sequence:</b> <code>NLYIQWLKDGGPSSGRPPPS</code> or <code>NLYIQWLKDGGPSSGRPPPS:MKTVRQERLKSDHELFRTHT</code>
             <br>📖 <a href="https://unsw.sharepoint.com/sites/StructuralBiologyFacility-UserDocumentation/SitePages/ProteinFold-User-Guide.aspx?ga=1#preparing-your-inputs">User Guide</a> for advanced options.
+    msa:
+        widget: "path_selector"
+        label: "Optional ColabFold MSA file or directory"
+        placeholder: "Optional .a3m file (one sample) or directory of matching .a3m files"
+        required: false
+        help: |
+            For one sample, select its A3M file. For multiple samples, select a directory containing A3Ms named after the input files (for example, complex.fasta and complex.a3m). A3Ms alongside input files are matched automatically. A samplesheet can also specify an msa path for each row. Samples without a match run the normal MSA search.
+
     run_name:
         widget: "text_field"
         label: "Run Name"
@@ -129,11 +138,11 @@ attributes:
                 <li><b>ESMFold</b> Medium/Low accuracy, Fastest; No evolutionary sequence calculations - <a href="https://doi.org/10.1126/science.ade2574">ESMFold paper</a></li>
             </ul>
         options:
-            - ["Boltz", "boltz", {data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
-            - ["AlphaFold2", "alphafold2", {data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
-            - ["AlphaFold3", "alphafold3", {data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true}]
+            - ["Boltz", "boltz", {data-hide-msa: true, data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["AlphaFold2", "alphafold2", {data-hide-msa: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["AlphaFold3", "alphafold3", {data-hide-msa: true, data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true}]
             - ["ColabFold", "colabfold", {data-hide-full_dbs: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
-            - ["ESMFold", "esmfold", {data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["ESMFold", "esmfold", {data-hide-msa: true, data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
         display: true
 
     af3_weights:
