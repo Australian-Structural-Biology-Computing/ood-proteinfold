@@ -21,22 +21,9 @@
     "opendde",
     "rosettafold3"
   ]);
-  // Approximate residue limits where they are known; backends without an
-  // entry simply show no length panel.
-  const METHOD_TOKEN_LIMITS = {
-    alphafold2: {
-      title: "AlphaFold2",
-      limit: 4000
-    },
-    alphafold3: {
-      title: "AlphaFold3",
-      limit: 5000,
-    },
-    boltz2: {
-      title: "Boltz2",
-      limit: 5000
-    }
-  };
+  // Approximate token budget shared by the ColabFold2 prediction backends;
+  // inputs longer than this are warned about but not blocked.
+  const APPROXIMATE_TOKEN_LIMIT = 5000;
 
   const parseTruthy = (value) => {
     if (value === null || value === undefined) return false;
@@ -308,9 +295,6 @@
   onPageLoad(initResumeId);
   onPageLoad(initDynamicHide);
 
-  // Per-method approximate token limits (METHOD_TOKEN_LIMITS) are no longer
-  // shown as a banner; they back the preflight warnings raised when an input
-  // exceeds the length a backend can comfortably handle.
 
   const initSaveIntermediatesWarning = () => {
     const checkbox = getFieldCheckbox('save_intermediates');
@@ -853,11 +837,10 @@
       if (terminalStops) {
         messages.push(`Manual sequence: terminal stop codon will be removed from ${terminalStops} chain(s).`);
       }
-      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
       const length = sequence.replace(/:/g, "").length;
-      if (limit && length > limit.limit) {
+      if (length > APPROXIMATE_TOKEN_LIMIT) {
         messages.push(
-          `Manual sequence length ${length.toLocaleString()} residues exceeds the ${limit.title} approximate limit of ${limit.limit.toLocaleString()}.`
+          `Manual sequence length ${length.toLocaleString()} residues exceeds the approximate ${APPROXIMATE_TOKEN_LIMIT.toLocaleString()}-token budget shared by the prediction backends.`
         );
       }
       return { messages, severity: messages.length ? "review" : "pass" };
@@ -871,7 +854,6 @@
     const analyseFiles = (files) => {
       const messages = [];
       const seen = new Map();
-      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
       const collection = files.some((file) => file.collectionInput);
       let runnableInputs = 0;
       let severity = "pass";
@@ -934,9 +916,9 @@
         runnableInputs += 1;
         seen.set(file.sequenceKey, file.label);
         if (file.changes.length) add(`${file.label}: ${file.changes.join(", ")}.`);
-        if (limit && file.sequenceLength > limit.limit) {
+        if (file.sequenceLength > APPROXIMATE_TOKEN_LIMIT) {
           add(
-            `${file.label}: total sequence length ${file.sequenceLength.toLocaleString()} residues exceeds the ${limit.title} approximate limit of ${limit.limit.toLocaleString()}.`,
+            `${file.label}: total sequence length ${file.sequenceLength.toLocaleString()} residues exceeds the approximate ${APPROXIMATE_TOKEN_LIMIT.toLocaleString()}-token budget shared by the prediction backends.`,
             "review"
           );
         }
