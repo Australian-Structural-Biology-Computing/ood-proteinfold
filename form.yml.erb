@@ -35,8 +35,8 @@ form:
     - samplesheet
     - samplesheet_help
     - run_name
-    - af_method
     - msa_tool
+    - af_method
     - af3_weights
     - af3_warning
     - full_dbs
@@ -116,19 +116,8 @@ attributes:
         widget: "select"
         label: "Method"
         help: |
-            Every method predicts through the pipeline's ColabFold2 backend; the AF3-style
-            backends accept rich entities (RNA, DNA, ligands) via their JSON/YAML inputs.
-            <ul>
-                <li><b>AlphaFold2</b> High accuracy, slower; MMseqs2 MSA search - <a href="https://doi.org/10.1038/s41586-021-03819-2">AlphaFold2 paper</a></li>
-                <li><b>AlphaFold3</b> High accuracy, Restricted use - <a href="https://doi.org/10.1038/s41586-024-07487-w">AlphaFold3 paper</a></li>
-                <li><b>Boltz2</b> High accuracy, faster open AF3-style method - <a href="https://doi.org/10.1101/2024.11.19.624167">Boltz-1 paper</a> <a href="https://doi.org/10.1101/2025.06.14.659707">Boltz-2 paper</a>
-                    <ul>
-                        <li><i>Runs with the <a href="https://doi.org/10.1101/2025.10.29.684571">LMI4Boltz</a> implementation on Katana, which reduces VRAM requirements and allows larger structure predictions. Accepts Boltz YAML inputs.</i></li>
-                    </ul>
-                </li>
-                <li><b>ESMFold2</b> Medium/Low accuracy, fastest; optional language-model path - <a href="https://doi.org/10.1126/science.ade2574">ESMFold paper</a></li>
-                <li><b>Chai1 / Protenix2 / OpenFold3 / OpenBind0 / IntelliFold2 / OpenDDE / RosettaFold3</b> Additional open ColabFold2 backends - see the <a href="https://github.com/sokrypton/ColabFold">ColabFold</a> documentation for entity support per backend.</li>
-            </ul>
+            Prediction backend. The AlphaFold3-style backends accept rich entities
+            (RNA, DNA, ligands) via their JSON/YAML inputs.
         options:
             - ["AlphaFold2", "alphafold2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
             - ["AlphaFold3", "alphafold3"]
