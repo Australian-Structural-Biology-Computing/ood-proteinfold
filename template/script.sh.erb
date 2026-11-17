@@ -265,6 +265,37 @@ function create_and_normalise_samplesheet() {
     sanitise_input samplesheet-ids "${SAMPLESHEET}" "$(pwd)/WARNING.txt" || true
 }
 
+function append_json_samplesheet_rows() {
+    # Append one id,fasta row per AlphaFold3 JSON file to an existing
+    # samplesheet. The job's name field provides the id, falling back to the
+    # file stem; exactly one job per file is required.
+    python3 - "$@" <<'PY'
+import csv, json, os, sys
+samplesheet = sys.argv[1]
+for path in sys.argv[2:]:
+    with open(path, encoding="utf-8-sig") as handle:
+        job = json.load(handle)
+    if isinstance(job, list):
+        if len(job) != 1:
+            raise SystemExit(f"ERROR: {path} contains {len(job)} AlphaFold3 jobs; provide one job per file.")
+        job = job[0]
+    if not isinstance(job, dict):
+        raise SystemExit(f"ERROR: {path} is not an AlphaFold3 JSON job object.")
+    name = job.get("name")
+    if not (isinstance(name, str) and name.strip()):
+        name = os.path.splitext(os.path.basename(path))[0]
+    csv.writer(open(samplesheet, "a", encoding="utf-8", newline="")).writerow([name, path])
+PY
+}
+
+function create_json_samplesheet() {
+    # Create an id,fasta samplesheet from AlphaFold3 JSON files (one job per row).
+    local samplesheet="$1"
+    shift
+    printf 'id,fasta\n' > "${samplesheet}"
+    append_json_samplesheet_rows "${samplesheet}" "$@"
+}
+
 # Check if the input is an amino acid sequence or a path
 raw_user_input="<%= context.samplesheet %>"
 user_input="$(printf '%s' "${raw_user_input}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
@@ -274,7 +305,8 @@ af_method="<%= context.af_method %>"
 MODE=""
 [[ "${sequence_input}" =~ ^[ACDEFGHIKLMNPQRSTVWYX]+(:[ACDEFGHIKLMNPQRSTVWYX]+)*$ ]] && MODE="MANUAL_INPUT"
 [[ "${user_input,,}" =~ \.csv$ ]] && MODE="SAMPLESHEET_INPUT"
-[[ "${user_input,,}" =~ \.(fa(sta)?|y(a)?ml)$ ]] && MODE="FASTA_INPUT"
+[[ "${user_input,,}" =~ \.json$ ]] && MODE="JSON_INPUT"
+[[ "${user_input,,}" =~ \.(fa|fasta)$ ]] && MODE="FASTA_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
 if [ "${MODE}" == "MANUAL_INPUT" ] && [ "${RESUME_RUN}" == "false" ]; then
@@ -293,13 +325,12 @@ fi
 
 echo "${MODE}"
 
-# Check YAML/YML compatibility - only supported by Boltz
-if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input,,}" =~ \.(yaml|yml)$ ]]; then
-    if [ "${af_method}" != "boltz" ]; then
-        echo "ERROR: YAML/YML input files are only supported by Boltz."
-        echo "Current method: ${af_method}"
-        exit 1
-    fi
+# Reject YAML/YML inputs outright: the single-workflow pipeline's backends
+# consume FASTA or AlphaFold3-format JSON, not Boltz YAML.
+if [[ "${user_input,,}" =~ \.(yaml|yml)$ ]]; then
+    echo "ERROR: YAML/YML input files are not supported. Provide FASTA or AlphaFold3 JSON input:"
+    echo "       https://github.com/google-deepmind/alphafold3/blob/main/docs/input.md"
+    exit 1
 fi
 
 SAMPLESHEET=""
@@ -347,6 +378,19 @@ elif [ "${MODE}" == "FASTA_INPUT" ]; then
     sanitise_staged_directory
     create_and_normalise_samplesheet --directory "./fasta"
 
+elif [ "${MODE}" == "JSON_INPUT" ]; then
+    mkdir -p fasta
+    cp "${user_input}" ./fasta/
+    dos2unix ./fasta/*
+    sanitise_staged_directory
+    if [ ! -e "./fasta/$(basename "${user_input}")" ]; then
+        echo "ERROR: The AlphaFold3 JSON input was rejected during validation (see WARNING.txt)."
+        exit 1
+    fi
+    create_json_samplesheet "$(pwd)/samplesheet.csv" ./fasta/*
+    SAMPLESHEET="$(pwd)/samplesheet.csv"
+    sanitise_input samplesheet-ids "${SAMPLESHEET}" "$(pwd)/WARNING.txt" || true
+
 elif [ "${MODE}" == "DIRECTORY" ]; then
     mkdir -p fasta
     working_dir=$(pwd)
@@ -355,10 +399,7 @@ elif [ "${MODE}" == "DIRECTORY" ]; then
     do
         [ -f "${filename}" ] || continue
         case "${filename,,}" in
-            *.fa|*.fasta)
-                ;;
-            *.yaml|*.yml)
-                [ "${af_method}" == "boltz" ] || continue
+            *.fa|*.fasta|*.json)
                 ;;
             *)
                 continue
@@ -385,7 +426,21 @@ elif [ "${MODE}" == "DIRECTORY" ]; then
     fi
     dos2unix "${staged_inputs[@]}"
     sanitise_staged_directory
-    create_and_normalise_samplesheet --directory "./fasta"
+    json_inputs=(./fasta/*.json)
+    if [ ${#json_inputs[@]} -gt 0 ] && [ "${json_inputs[0]}" != "./fasta/*.json" ] && [ ${#json_inputs[@]} -eq ${#staged_inputs[@]} ]; then
+        # Directory contains only AlphaFold3 JSON files.
+        create_json_samplesheet "$(pwd)/samplesheet.csv" "${json_inputs[@]}"
+        SAMPLESHEET="$(pwd)/samplesheet.csv"
+        sanitise_input samplesheet-ids "${SAMPLESHEET}" "$(pwd)/WARNING.txt" || true
+    elif [ "${json_inputs[0]}" != "./fasta/*.json" ]; then
+        # Mixed directory: create-samplesheet covers the FASTA files (it
+        # ignores JSON files); append one row per AlphaFold3 JSON job.
+        create_and_normalise_samplesheet --directory "./fasta"
+        append_json_samplesheet_rows "${SAMPLESHEET}" "${json_inputs[@]}"
+        sanitise_input samplesheet-ids "${SAMPLESHEET}" "$(pwd)/WARNING.txt" || true
+    else
+        create_and_normalise_samplesheet --directory "./fasta"
+    fi
 fi
 
 if [ "${RESUME_RUN}" == "false" ]; then
@@ -397,6 +452,8 @@ if [ -f "$(pwd)/WARNING.txt" ]; then
 fi
 
 PIPELINE_MODE=""
+# The single-workflow pipeline separates MSA generation (--msa_tool) from
+# structure prediction (--mode, always a COLABFOLD2_INFERENCE backend token).
 ARGS="--db ${DB_PATH}"
 NEXTFLOW_CONFIG_ARGS=("-c" "${PROJECT_ROOT}/kod_proteinfold-${RUN_ENVIRONMENT}.config")
 COLABFOLD_RECYCLES="<%= context.colabfold_num_recycles %>"
@@ -404,18 +461,19 @@ COLABFOLD_NUM_SEEDS="<%= context.colabfold_num_seeds %>"
 RANDOM_SEED="<%= context.random_seed %>"
 COLABFOLD_USE_DROPOUT="<%= context.colabfold_use_dropout %>"
 COLABFOLD_MAX_MSA="<%= context.colabfold_max_msa %>"
-ESMFOLD_RECYCLES="<%= context.esmfold_num_recycles %>"
-BOLTZ_USE_POTENTIALS="<%= context.boltz_use_potentials %>"
 SAVE_INTERMEDIATES="<%= context.save_intermediates %>"
 GENERATE_PLDDT_PREVIEWS="<%= context.generate_plddt_previews %>"
 AF3_WEIGHTS="<%= context.af3_weights %>"
 
-# UI enforces this when ColabFold advanced sampling is active, but keep the
+# UI enforces this when conformational sampling is active, but keep the
 # server-side override as a fallback in case the form state is inconsistent.
 if [ "<%= context.colabfold_advanced_options %>" == "yes" ]; then
     SAVE_INTERMEDIATES="true"
 fi
 
+# Database choice for the AlphaFold2 MSA pipeline generator (hhblits against
+# the reduced bfd, or JackHMMER against the full bfd). Applied after the
+# MSA generator is selected below.
 if [ "<%= context.full_dbs %>" == "full" ];
 then
     FULL_DB="true"
@@ -423,78 +481,91 @@ else
     FULL_DB="false"
 fi
 
-if [ "<%= context.af_method %>" == "alphafold2" ]; then
-    PIPELINE_MODE="alphafold2"
-    ARGS="${ARGS} --full_dbs ${FULL_DB}"
-    if [ -n "${RANDOM_SEED}" ]; then
-        ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
-    fi
+# Map the form's method onto the single-workflow pipeline. The form's method
+# values are the pipeline's ColabFold2 --mode backend tokens; every method
+# predicts through the COLABFOLD2_INFERENCE module. The MSA generator is
+# chosen independently (msa_tool).
+AF_METHOD="<%= context.af_method %>"
+case "${AF_METHOD}" in
+    alphafold2|alphafold3|boltz2|esmfold2|chai1|protenix2|openfold3|openbind0|intellifold2|opendde|rosettafold3)
+        PIPELINE_MODE="${AF_METHOD}"
+        ;;
+    *)
+        echo "ERROR: Unsupported prediction method: ${AF_METHOD}"
+        exit 1
+        ;;
+esac
+
+MSA_TOOL="<%= context.msa_tool %>"
+case "${MSA_TOOL}" in
+    colabfold_search|alphafold2_msa|alphafold3_msa)
+        ;;
+    "")
+        MSA_TOOL="colabfold_search"
+        ;;
+    *)
+        echo "ERROR: Unsupported MSA generator: ${MSA_TOOL}"
+        exit 1
+        ;;
+esac
+
+if [ "${MSA_TOOL}" == "alphafold2_msa" ]; then
+    ARGS="${ARGS} --alphafold2_full_dbs ${FULL_DB}"
 fi
 
-if [ "<%= context.af_method %>" == "boltz" ]; then
-    PIPELINE_MODE="boltz"
-    if [ -n "${RANDOM_SEED}" ]; then
-        ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
-    fi
-    if [ "${BOLTZ_USE_POTENTIALS}" == "true" ]; then
-        ARGS="${ARGS} --boltz_use_potentials true"
-    fi
+if [ -n "${RANDOM_SEED}" ]; then
+    ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
 fi
 
-if [ "<%= context.af_method %>" == "alphafold3" ]; then
+if [ -n "${COLABFOLD_RECYCLES}" ]; then
+    ARGS="${ARGS} --colabfold_num_recycles ${COLABFOLD_RECYCLES}"
+fi
+
+# Model weights: every method except AlphaFold3 silently uses the shared
+# ColabFold2 weights under ${DB_PATH}/colabfold2_models (the pipeline's
+# implicit fallback -- the app passes no weights argument at all, exactly as
+# --db is handled). AlphaFold3 requires user-provided licensed weights; the
+# value is only honoured for alphafold3 so a stale path left in the hidden
+# field after switching methods cannot redirect other modes at a weights root
+# that lacks their checkpoints.
+if [ "${AF_METHOD}" == "alphafold3" ]; then
     if [ -z "${AF3_WEIGHTS}" ]; then
-        echo "ERROR: AlphaFold3 requires a path to user-provided weights."
+        echo "ERROR: AlphaFold3 requires a path to user-provided AlphaFold3 weights."
         exit 1
     fi
-    if [ ! -f "${AF3_WEIGHTS}" ] || [ ! -r "${AF3_WEIGHTS}" ]; then
-        echo "ERROR: AlphaFold3 weights are not readable: ${AF3_WEIGHTS}"
+    if [ ! -d "${AF3_WEIGHTS}" ] || [ ! -r "${AF3_WEIGHTS}" ]; then
+        echo "ERROR: AlphaFold3 weights directory is not readable: ${AF3_WEIGHTS}"
         exit 1
     fi
-
-    PIPELINE_MODE="alphafold3"
-    ARGS="${ARGS} --alphafold3_params_path ${AF3_WEIGHTS}"
+    ARGS="${ARGS} --colabfold2_params_path ${AF3_WEIGHTS}"
 fi
 
-if [ "<%= context.af_method %>" == "colabfold" ]; then
-    PIPELINE_MODE="colabfold"
-    if [ -n "${RANDOM_SEED}" ]; then
-        ARGS="${ARGS} --random_seed ${RANDOM_SEED}"
-    fi
+# Conformational sampling (seeds, dropout, MSA depth): the flags are accepted
+# by colabfold_batch for all model types and forwarded to COLABFOLD2_INFERENCE
+# through ext.args. Defined after the main config so this override wins the
+# config merge.
+COLABFOLD_BATCH_EXTRA_ARGS=""
 
-    if [ -n "${COLABFOLD_RECYCLES}" ]; then
-        ARGS="${ARGS} --colabfold_num_recycles ${COLABFOLD_RECYCLES}"
-    fi
+if [ -n "${COLABFOLD_NUM_SEEDS}" ]; then
+    COLABFOLD_BATCH_EXTRA_ARGS="${COLABFOLD_BATCH_EXTRA_ARGS} --num-seeds ${COLABFOLD_NUM_SEEDS}"
+fi
+if [ "${COLABFOLD_USE_DROPOUT}" == "true" ]; then
+    COLABFOLD_BATCH_EXTRA_ARGS="${COLABFOLD_BATCH_EXTRA_ARGS} --use-dropout"
+fi
+if [ -n "${COLABFOLD_MAX_MSA}" ] && [ "${COLABFOLD_MAX_MSA}" != "auto" ]; then
+    COLABFOLD_BATCH_EXTRA_ARGS="${COLABFOLD_BATCH_EXTRA_ARGS} --max-msa ${COLABFOLD_MAX_MSA}"
+fi
 
-    COLABFOLD_BATCH_EXTRA_ARGS=""
-
-    if [ -n "${COLABFOLD_NUM_SEEDS}" ]; then
-        COLABFOLD_BATCH_EXTRA_ARGS="${COLABFOLD_BATCH_EXTRA_ARGS} --num-seeds ${COLABFOLD_NUM_SEEDS}"
-    fi
-    if [ "${COLABFOLD_USE_DROPOUT}" == "true" ]; then
-        COLABFOLD_BATCH_EXTRA_ARGS="${COLABFOLD_BATCH_EXTRA_ARGS} --use-dropout"
-    fi
-    if [ -n "${COLABFOLD_MAX_MSA}" ] && [ "${COLABFOLD_MAX_MSA}" != "auto" ]; then
-        COLABFOLD_BATCH_EXTRA_ARGS="${COLABFOLD_BATCH_EXTRA_ARGS} --max-msa ${COLABFOLD_MAX_MSA}"
-    fi
-
-    if [ -n "${COLABFOLD_BATCH_EXTRA_ARGS}" ]; then
-        OOD_COLABFOLD_CONFIG="$(pwd)/ood_colabfold_batch.config"
-        cat > "${OOD_COLABFOLD_CONFIG}" <<EOF
+if [ -n "${COLABFOLD_BATCH_EXTRA_ARGS}" ]; then
+    OOD_COLABFOLD_CONFIG="$(pwd)/ood_colabfold2_inference.config"
+    cat > "${OOD_COLABFOLD_CONFIG}" <<EOF
 process {
-    withName: 'COLABFOLD_BATCH' {
+    withName: 'COLABFOLD2_INFERENCE' {
         ext.args = '${COLABFOLD_BATCH_EXTRA_ARGS# }'
     }
 }
 EOF
-        NEXTFLOW_CONFIG_ARGS+=("-c" "${OOD_COLABFOLD_CONFIG}")
-    fi
-fi
-
-if [ "<%= context.af_method %>" == "esmfold" ]; then
-    PIPELINE_MODE="esmfold"
-    if [ -n "${ESMFOLD_RECYCLES}" ]; then
-        ARGS="${ARGS} --esmfold_num_recycles ${ESMFOLD_RECYCLES}"
-    fi
+    NEXTFLOW_CONFIG_ARGS+=("-c" "${OOD_COLABFOLD_CONFIG}")
 fi
 
 if [ "${SAVE_INTERMEDIATES}" == "true" ]; then
@@ -538,6 +609,7 @@ nextflow "${NEXTFLOW_CONFIG_ARGS[@]}" run "${PROJECT}" "${NEXTFLOW_REVISION_ARGS
     --input "${SAMPLESHEET}" \
     --outdir "${OUT_DIR}" \
     --mode "${PIPELINE_MODE}" \
+    --msa_tool "${MSA_TOOL}" \
     --use_gpu \
     --monochrome_logs \
     ${ARGS} \

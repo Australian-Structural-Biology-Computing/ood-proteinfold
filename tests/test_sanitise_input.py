@@ -2,11 +2,11 @@ import contextlib
 import csv
 import importlib.util
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
 
-import yaml
 
 
 MODULE_PATH = Path(__file__).parents[1] / "template" / "sanitise_input.py"
@@ -88,7 +88,7 @@ class SanitiseFastaTests(unittest.TestCase):
             source.write_text(">bad_smiles|smiles\nCCO/\n")
 
             with self.assertRaisesRegex(ValueError, "dangling bond or component syntax"):
-                SANITISE_INPUT.sanitise_fasta(source, destination, "boltz")
+                SANITISE_INPUT.sanitise_fasta(source, destination, "boltz2")
 
     def test_strips_terminal_stop_before_hashing(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -126,7 +126,7 @@ class SanitiseFastaTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)
-            for method in ("alphafold3", "boltz"):
+            for method in ("alphafold3", "boltz2"):
                 for entity_type, (contents, sequence) in inputs.items():
                     with self.subTest(method=method, entity_type=entity_type):
                         source = directory / f"{method}-{entity_type}.fasta"
@@ -172,141 +172,72 @@ class SanitiseDirectoryTests(unittest.TestCase):
             self.assertFalse((directory / "b.fasta").exists())
             self.assertIn(str(directory / "b.fasta"), warning_path.read_text())
 
-    def test_unchanged_boltz_yaml_does_not_create_warning(self):
+    def test_keeps_valid_af3_json_and_skips_invalid_jobs(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)
-            input_path = directory / "input.yaml"
             warning_path = directory / "WARNING.txt"
-            contents = (
-                "sequences:\n"
-                "  - protein:\n      id: [A, B]\n      sequence: MKTAYIAKQR\n"
-                "  - dna:\n      id: C\n      sequence: ACTGN\n"
-                "  - rna:\n      id: D\n      sequence: ACUGN\n"
-                "  - ligand:\n      id: E\n      smiles: 'C/C=C\\C.CC'\n"
-                "  - ligand:\n      id: F\n      ccd: ATP\n"
-                "  - ligand:\n      id: G\n      ccd: [NAD, ZN]\n"
+            valid = directory / "job.json"
+            valid.write_text(
+                '{"name": "job", "sequences": '
+                '[{"protein": {"id": ["A"], "sequence": "ACDE"}}]}'
             )
-            input_path.write_text(contents)
+            multi = directory / "multi.json"
+            multi.write_text('[{"name": "a", "sequences": []}, {"name": "b", "sequences": []}]')
+            malformed = directory / "malformed.json"
+            malformed.write_text("{not json")
 
-            SANITISE_INPUT.sanitise_directory(directory, warning_path, "boltz")
+            with contextlib.redirect_stderr(io.StringIO()):
+                SANITISE_INPUT.sanitise_directory(directory, warning_path)
 
-            self.assertFalse(warning_path.exists())
-            self.assertEqual(input_path.read_text(), contents)
+            self.assertTrue(valid.exists())
+            self.assertFalse(multi.exists())
+            self.assertFalse(malformed.exists())
+            warnings = warning_path.read_text()
+            self.assertIn("multi.json", warnings)
+            self.assertIn("one job per file", warnings)
+            self.assertIn("malformed.json", warnings)
+            self.assertIn("not valid JSON", warnings)
 
 
-class BoltzYamlTests(unittest.TestCase):
-    def test_accepts_all_supported_entities_and_ligand_representations(self):
+class Af3JsonTests(unittest.TestCase):
+    def test_accepts_single_job_and_returns_name(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            source = Path(temporary_directory) / "input.yaml"
-            destination = Path(temporary_directory) / "output.yaml"
-            source.write_text(
-                "sequences:\n"
-                "  - protein:\n      id: [A, B]\n      sequence: MKTAYIAKQR\n"
-                "  - dna:\n      id: C\n      sequence: ACTGN\n"
-                "  - rna:\n      id: D\n      sequence: ACUGN\n"
-                "  - ligand:\n      id: E\n      smiles: 'C/C=C\\C.CC'\n"
-                "  - ligand:\n      id: F\n      ccd: ATP\n"
-                "  - ligand:\n      id: G\n      ccd: [NAD, ZN]\n"
+            path = Path(temporary_directory) / "job.json"
+            path.write_text(
+                '{"name": "myjob", "sequences": '
+                '[{"protein": {"id": ["A"], "sequence": "ACDE"}}]}'
             )
+            self.assertEqual(SANITISE_INPUT.validate_af3_json(path), "myjob")
 
-            changes = SANITISE_INPUT.sanitise_boltz_yaml(source, destination)
-
-            self.assertEqual(changes, [])
-            self.assertEqual(destination.read_bytes(), source.read_bytes())
-
-    def test_normalises_all_supported_input_values(self):
+    def test_accepts_nameless_single_job(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            source = Path(temporary_directory) / "input.yaml"
-            destination = Path(temporary_directory) / "output.yaml"
-            source.write_text(
-                "sequences:\n"
-                "  - protein:\n      id: A\n      sequence: 'M K T*'\n"
-                "  - dna:\n      id: B\n      sequence: 'A C T G'\n"
-                "  - rna:\n      id: C\n      sequence: 'A C U G'\n"
-                "  - ligand:\n      id: D\n      smiles: 'C C O'\n"
-                "  - ligand:\n      id: E\n      ccd: ' ATP '\n"
-                "  - ligand:\n      id: F\n      ccd: ['NAD ', ' ZN']\n"
-            )
+            path = Path(temporary_directory) / "job.json"
+            path.write_text('{"sequences": [{"protein": {"id": ["A"], "sequence": "ACDE"}}]}')
+            self.assertIsNone(SANITISE_INPUT.validate_af3_json(path))
 
-            changes = SANITISE_INPUT.sanitise_boltz_yaml(source, destination)
-            data = yaml.safe_load(destination.read_text())
-
-            self.assertEqual(
-                changes,
-                [
-                    "removed terminal stop codon from 1 Boltz YAML sequence(s)",
-                    "removed 14 whitespace character(s) from Boltz YAML input data",
-                ],
-            )
-            self.assertEqual(data["sequences"][0]["protein"]["sequence"], "MKT")
-            self.assertEqual(data["sequences"][1]["dna"]["sequence"], "ACTG")
-            self.assertEqual(data["sequences"][2]["rna"]["sequence"], "ACUG")
-            self.assertEqual(data["sequences"][3]["ligand"]["smiles"], "CCO")
-            self.assertEqual(data["sequences"][4]["ligand"]["ccd"], "ATP")
-            self.assertEqual(data["sequences"][5]["ligand"]["ccd"], ["NAD", "ZN"])
-
-    def test_rejects_invalid_entity_values(self):
-        invalid_inputs = {
-            "invalid protein": (
-                "sequences:\n  - protein:\n      id: A\n      sequence: MKTAY?AKQR\n",
-                r"invalid amino acid character\(s\): \?",
-            ),
-            "colon-delimited protein": (
-                "sequences:\n  - protein:\n      id: [A, B]\n      sequence: MKT:AYI\n",
-                "use an id list",
-            ),
-            "invalid dna": (
-                "sequences:\n  - dna:\n      id: A\n      sequence: ACTUG\n",
-                "invalid nucleotide characters",
-            ),
-            "invalid rna": (
-                "sequences:\n  - rna:\n      id: A\n      sequence: ACUTG\n",
-                "invalid nucleotide characters",
-            ),
-            "invalid smiles": (
-                "sequences:\n  - ligand:\n      id: A\n      smiles: CCO?\n",
-                "unsupported characters",
-            ),
-            "empty ccd": (
-                "sequences:\n  - ligand:\n      id: A\n      ccd: []\n",
-                "non-empty list of strings",
-            ),
-            "non-string ccd": (
-                "sequences:\n  - ligand:\n      id: A\n      ccd: 123\n",
-                "string or non-empty list of strings",
-            ),
-        }
+    def test_rejects_multiple_jobs_in_one_file(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            input_path = Path(temporary_directory) / "input.yaml"
-            for name, (contents, message) in invalid_inputs.items():
-                with self.subTest(name=name):
-                    input_path.write_text(contents)
-                    with self.assertRaisesRegex(SANITISE_INPUT.InputValidationError, message):
-                        SANITISE_INPUT.validate_boltz_yaml(input_path)
+            path = Path(temporary_directory) / "jobs.json"
+            path.write_text('[{"name": "a", "sequences": []}, {"name": "b", "sequences": []}]')
+            with self.assertRaises(SANITISE_INPUT.InputValidationError) as raised:
+                SANITISE_INPUT.validate_af3_json(path)
+            self.assertIn("one job per file", str(raised.exception))
 
-    def test_rejects_invalid_yaml_structure(self):
-        invalid_inputs = {
-            "empty sequences": "sequences: []\n",
-            "unknown entity": "sequences:\n  - carbohydrate:\n      id: A\n",
-            "missing id": "sequences:\n  - protein:\n      sequence: ACDE\n",
-            "duplicate ids": (
-                "sequences:\n"
-                "  - protein:\n      id: A\n      sequence: ACDE\n"
-                "  - dna:\n      id: A\n      sequence: ACTG\n"
-            ),
-            "missing sequence": "sequences:\n  - rna:\n      id: A\n",
-            "ligand fields": (
-                "sequences:\n"
-                "  - ligand:\n      id: A\n      smiles: CCO\n      ccd: ATP\n"
-            ),
-        }
+    def test_rejects_non_job_objects_and_missing_sequences(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
-            input_path = Path(temporary_directory) / "input.yaml"
-            for name, contents in invalid_inputs.items():
-                with self.subTest(name=name):
-                    input_path.write_text(contents)
-                    with self.assertRaises(SANITISE_INPUT.InputValidationError):
-                        SANITISE_INPUT.validate_boltz_yaml(input_path)
+            path = Path(temporary_directory) / "notes.json"
+            path.write_text('{"notes": "hello"}')
+            with self.assertRaises(SANITISE_INPUT.InputValidationError) as raised:
+                SANITISE_INPUT.validate_af3_json(path)
+            self.assertIn("sequences list", str(raised.exception))
+
+    def test_rejects_malformed_json(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "broken.json"
+            path.write_text("{not json")
+            with self.assertRaises(SANITISE_INPUT.InputValidationError) as raised:
+                SANITISE_INPUT.validate_af3_json(path)
+            self.assertIn("not valid JSON", str(raised.exception))
 
 
 class SanitiseSamplesheetTests(unittest.TestCase):
@@ -316,16 +247,14 @@ class SanitiseSamplesheetTests(unittest.TestCase):
             (directory / "first.fasta").write_text(">first|protein\nACDE\n")
             (directory / "duplicate.fasta").write_text(">duplicate|protein\nAC DE\n")
             (directory / "dna.fasta").write_text(">dna|dna\nACTGN\n")
-            (directory / "input.yaml").write_text(
-                "sequences:\n  - protein:\n      id: A\n      sequence: ACDE\n"
-            )
+            (directory / "input.json").write_text('{"notes": "not a job"}')
             samplesheet = directory / "samplesheet.csv"
             samplesheet.write_text(
                 "id,fasta\n"
                 "first,first.fasta\n"
                 "duplicate,duplicate.fasta\n"
                 "dna,dna.fasta\n"
-                "yaml,input.yaml\n"
+                "json,input.json\n"
             )
             output_path = directory / "sanitised.csv"
             warning_path = directory / "WARNING.txt"
@@ -340,32 +269,35 @@ class SanitiseSamplesheetTests(unittest.TestCase):
             warnings = warning_path.read_text()
             self.assertIn("normalised FASTA content matches row 2", warnings)
             self.assertIn("FASTA record is dna input", warnings)
-            self.assertIn("YAML input is only supported by Boltz", warnings)
+            self.assertIn("Skipped samplesheet row 5", warnings)
+            self.assertIn("no sequences list", warnings)
 
-    def test_keeps_non_protein_and_yaml_entries_for_boltz(self):
+    def test_keeps_non_protein_entries_and_valid_af3_json(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)
             (directory / "protein.fasta").write_text(">protein|protein\nACDE\n")
             (directory / "smiles.fasta").write_text(">ligand|smiles\nCCO\n")
-            (directory / "input.yaml").write_text(
-                "sequences:\n  - protein:\n      id: A\n      sequence: ACDE\n"
+            (directory / "job.json").write_text(
+                '{"name": "job", "sequences": '
+                '[{"protein": {"id": ["A"], "sequence": "ACDE"}}]}'
             )
             samplesheet = directory / "samplesheet.csv"
             samplesheet.write_text(
                 "id,fasta\n"
                 "protein,protein.fasta\n"
                 "smiles,smiles.fasta\n"
-                "yaml,input.yaml\n"
+                "job,job.json\n"
             )
             output_path = directory / "sanitised.csv"
 
             SANITISE_INPUT.sanitise_samplesheet(
-                samplesheet, output_path, directory / "inputs", directory / "WARNING.txt", "boltz"
+                samplesheet, output_path, directory / "inputs", directory / "WARNING.txt", "alphafold3"
             )
 
             with output_path.open(newline="") as handle:
                 rows = list(csv.DictReader(handle))
-            self.assertEqual([row["id"] for row in rows], ["protein", "smiles", "yaml"])
+            self.assertEqual([row["id"] for row in rows], ["protein", "smiles", "job"])
+            self.assertIn("job.json", rows[-1]["fasta"])
 
 
 class NormaliseSamplesheetIdsTests(unittest.TestCase):

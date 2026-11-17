@@ -3,6 +3,7 @@
 
 import csv
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -11,7 +12,7 @@ import tempfile
 
 
 FASTA_SUFFIXES = (".fa", ".fasta")
-YAML_SUFFIXES = (".yaml", ".yml")
+JSON_SUFFIXES = (".json",)
 HEADERLESS_SEQUENCE_ID_LENGTH = 6
 PROTEIN_ALPHABET = frozenset("ACDEFGHIKLMNPQRSTVWYX")
 DNA_ALPHABET = frozenset("ACTGN")
@@ -19,7 +20,22 @@ RNA_ALPHABET = frozenset("ACUGN")
 SMILES_PATTERN = re.compile(r"[A-Za-z0-9@+\-\[\]\(\)=#\$%:./\\*]+")
 SMILES_DANGLING_TOKENS = frozenset("-/\\=#$%:.")
 ENTITY_TYPES = frozenset(("protein", "ccd", "smiles", "dna", "rna"))
-NON_PROTEIN_METHODS = frozenset(("alphafold3", "boltz"))
+# AF3-style ColabFold2 backends accept rich entities (RNA, DNA, ligands) via
+# their AlphaFold3-format JSON inputs; AlphaFold2 and ESMFold2 are
+# protein-only.
+NON_PROTEIN_METHODS = frozenset(
+    (
+        "alphafold3",
+        "boltz2",
+        "chai1",
+        "protenix2",
+        "openfold3",
+        "openbind0",
+        "intellifold2",
+        "opendde",
+        "rosettafold3",
+    )
+)
 POLYMER_ENTITY_TYPES = frozenset(("protein", "dna", "rna"))
 BOLTZ_ENTITY_TYPES = POLYMER_ENTITY_TYPES | {"ligand"}
 
@@ -99,170 +115,36 @@ def validate_entity_sequence(entity_type, sequence, allow_protein_chains=True):
             raise ValueError("SMILES sequence has dangling bond or component syntax")
 
 
-def load_boltz_yaml(path):
-    try:
-        import yaml
-    except ImportError as error:
-        raise InputValidationError("PyYAML is unavailable for Boltz YAML validation") from error
+def validate_af3_json(path):
+    """Validate an AlphaFold3 input JSON file; one job per file.
 
-    try:
-        with open(path, encoding="utf-8-sig") as handle:
-            data = yaml.safe_load(handle)
-    except (OSError, yaml.YAMLError) as error:
-        raise InputValidationError(f"Invalid Boltz YAML: {error}") from error
-
-    return data, yaml
-
-
-def normalise_boltz_yaml(data):
-    """Validate Boltz entities and normalise their sequence values in place."""
-
-    if not isinstance(data, dict):
-        raise InputValidationError("Boltz YAML must contain a top-level mapping")
-    sequences = data.get("sequences")
-    if not isinstance(sequences, list) or not sequences:
-        raise InputValidationError("Boltz YAML must contain a non-empty sequences list")
-
-    chain_ids = set()
-    removed_whitespace = 0
-    removed_terminal_stops = 0
-    for index, entry in enumerate(sequences, start=1):
-        if not isinstance(entry, dict) or len(entry) != 1:
+    Returns the job name (or None when the job does not define one). Raises
+    InputValidationError for files that are not a single AlphaFold3 job.
+    """
+    with open(path, encoding="utf-8-sig") as handle:
+        try:
+            job = json.load(handle)
+        except json.JSONDecodeError as error:
+            raise InputValidationError(f"is not valid JSON: {error}") from error
+    if isinstance(job, list):
+        if len(job) != 1:
             raise InputValidationError(
-                f"Boltz YAML sequence entry {index} must be a single-key mapping"
+                f"contains {len(job)} AlphaFold3 jobs; provide one job per file"
             )
-        entity_type, details = next(iter(entry.items()))
-        if entity_type not in BOLTZ_ENTITY_TYPES:
-            raise InputValidationError(
-                f"Boltz YAML sequence entry {index} has unsupported entity type: {entity_type}"
-            )
-        if not isinstance(details, dict):
-            raise InputValidationError(
-                f"Boltz YAML {entity_type} entry {index} must be a mapping"
-            )
-
-        identifiers = details.get("id")
-        identifiers = identifiers if isinstance(identifiers, list) else [identifiers]
-        if not identifiers or any(
-            not isinstance(value, str) or not value.strip() for value in identifiers
-        ):
-            raise InputValidationError(f"Boltz YAML {entity_type} entry {index} is missing id")
-        if len(set(identifiers)) != len(identifiers) or chain_ids.intersection(identifiers):
-            raise InputValidationError("Boltz YAML chain ids must be unique")
-        chain_ids.update(identifiers)
-
-        if entity_type in POLYMER_ENTITY_TYPES:
-            sequence = details.get("sequence")
-            if not isinstance(sequence, str) or not sequence.strip():
-                raise InputValidationError(
-                    f"Boltz YAML {entity_type} entry {index} is missing sequence"
-                )
-            normalised_sequence = strip_whitespace(sequence)
-            if not normalised_sequence:
-                raise InputValidationError(
-                    f"Boltz YAML {entity_type} entry {index} is missing sequence"
-                )
-            removed_whitespace += len(sequence) - len(normalised_sequence)
-            if entity_type == "protein":
-                if normalised_sequence.endswith("*"):
-                    normalised_sequence = normalised_sequence[:-1]
-                    removed_terminal_stops += 1
-            try:
-                validate_entity_sequence(
-                    entity_type, normalised_sequence, allow_protein_chains=False
-                )
-            except ValueError as error:
-                raise InputValidationError(
-                    f"Boltz YAML {entity_type} entry {index}: {error}"
-                ) from error
-            details["sequence"] = normalised_sequence
-        else:
-            ligand_keys = [key for key in ("smiles", "ccd") if key in details]
-            if len(ligand_keys) != 1:
-                raise InputValidationError(
-                    f"Boltz YAML ligand entry {index} must contain exactly one of smiles or ccd"
-                )
-            ligand_key = ligand_keys[0]
-            ligand_value = details[ligand_key]
-            if ligand_key == "smiles":
-                if not isinstance(ligand_value, str):
-                    raise InputValidationError(
-                        f"Boltz YAML ligand entry {index} smiles must be a string"
-                    )
-                normalised_smiles = strip_whitespace(ligand_value)
-                if not normalised_smiles:
-                    raise InputValidationError(
-                        f"Boltz YAML ligand entry {index} is missing smiles"
-                    )
-                removed_whitespace += len(ligand_value) - len(normalised_smiles)
-                try:
-                    validate_entity_sequence("smiles", normalised_smiles)
-                except ValueError as error:
-                    raise InputValidationError(
-                        f"Boltz YAML ligand entry {index}: {error}"
-                    ) from error
-                details["smiles"] = normalised_smiles
-            else:
-                ccd_codes = ligand_value if isinstance(ligand_value, list) else [ligand_value]
-                if not ccd_codes or any(
-                    not isinstance(code, str) or not code.strip() for code in ccd_codes
-                ):
-                    raise InputValidationError(
-                        f"Boltz YAML ligand entry {index} ccd must be a string or "
-                        "non-empty list of strings"
-                    )
-                normalised_codes = [code.strip() for code in ccd_codes]
-                removed_whitespace += sum(
-                    len(code) - len(normalised)
-                    for code, normalised in zip(ccd_codes, normalised_codes)
-                )
-                details["ccd"] = (
-                    normalised_codes if isinstance(ligand_value, list) else normalised_codes[0]
-                )
-
-    changes = []
-    if removed_terminal_stops:
-        changes.append(
-            f"removed terminal stop codon from {removed_terminal_stops} Boltz YAML sequence(s)"
+        job = job[0]
+    if not isinstance(job, dict):
+        raise InputValidationError("is not an AlphaFold3 JSON job object")
+    if not isinstance(job.get("sequences"), list) or not job["sequences"]:
+        raise InputValidationError(
+            "has no sequences list; see the AlphaFold3 input format documentation "
+            "(https://github.com/google-deepmind/alphafold3/blob/main/docs/input.md)"
         )
-    if removed_whitespace:
-        changes.append(
-            f"removed {removed_whitespace} whitespace character(s) from Boltz YAML input data"
-        )
-    return changes
+    name = job.get("name")
+    return str(name) if isinstance(name, str) and name.strip() else None
 
 
-def validate_boltz_yaml(path):
-    data, _ = load_boltz_yaml(path)
-    normalise_boltz_yaml(data)
-
-
-def sanitise_boltz_yaml(source_path, destination_path):
-    data, yaml = load_boltz_yaml(source_path)
-    changes = normalise_boltz_yaml(data)
-    if changes:
-        with open(destination_path, "w", encoding="utf-8") as destination:
-            yaml.safe_dump(data, destination, allow_unicode=True, sort_keys=False)
-    else:
-        shutil.copy2(source_path, destination_path)
-    return changes
-
-
-def sanitise_boltz_yaml_in_place(path):
-    data, yaml = load_boltz_yaml(path)
-    changes = normalise_boltz_yaml(data)
-    if not changes:
-        return changes
-    with tempfile.NamedTemporaryFile(dir=os.path.dirname(path), delete=False) as temporary:
-        temporary_path = temporary.name
-    try:
-        with open(temporary_path, "w", encoding="utf-8") as destination:
-            yaml.safe_dump(data, destination, allow_unicode=True, sort_keys=False)
-        os.replace(temporary_path, path)
-        return changes
-    except BaseException:
-        os.unlink(temporary_path)
-        raise
+def copy_input(source_path, destination_path):
+    shutil.copy2(source_path, destination_path)
 
 
 def sanitise_fasta(source_path, destination_path, af_method=None):
@@ -347,7 +229,7 @@ def sanitise_fasta(source_path, destination_path, af_method=None):
             if af_method and not entity_type_is_supported(entity_type, af_method):
                 raise IncompatibleEntityError(
                     f"FASTA record is {entity_type} input, which is only supported by "
-                    "AlphaFold3 or Boltz"
+                    "the AlphaFold3-style backends"
                 )
             digest.update(hashlib.sha256(sequence.encode("utf-8")).digest())
 
@@ -459,8 +341,8 @@ def input_kind(path):
     suffix = os.path.splitext(path)[1].lower()
     if suffix in FASTA_SUFFIXES:
         return "fasta"
-    if suffix in YAML_SUFFIXES:
-        return "yaml"
+    if suffix in JSON_SUFFIXES:
+        return "json"
     return None
 
 
@@ -542,13 +424,8 @@ def sanitise_samplesheet(samplesheet_path, output_path, input_dir, warning_path,
             if kind is None:
                 raise ValueError(
                     f"Samplesheet row {index} has unsupported input type: {input_path}. "
-                    "Expected a .fa or .fasta file, or a .yaml/.yml file for Boltz."
+                    "Expected a .fa or .fasta file, or an AlphaFold3 .json file."
                 )
-            if kind == "yaml" and af_method != "boltz":
-                warnings.append(
-                    f"Skipped samplesheet row {index}: YAML input is only supported by Boltz"
-                )
-                continue
 
             source_path = os.path.realpath(input_path)
             if source_path in seen_paths:
@@ -584,12 +461,14 @@ def sanitise_samplesheet(samplesheet_path, output_path, input_dir, warning_path,
                         f"({'; '.join(changes)})"
                     )
             else:
-                changes = sanitise_boltz_yaml(input_path, staged_path)
-                if changes:
+                try:
+                    validate_af3_json(input_path)
+                except InputValidationError as error:
                     warnings.append(
-                        f"Sanitised Boltz YAML referenced by samplesheet row {index}: "
-                        f"{source_path} ({'; '.join(changes)})"
+                        f"Skipped samplesheet row {index}: {input_path} {error}"
                     )
+                    continue
+                copy_input(input_path, staged_path)
 
             sample_id = (row.get(id_column) or "").strip()
             unique_id = unique_sample_id(sample_id, used_ids)
@@ -615,10 +494,10 @@ def sanitise_samplesheet(samplesheet_path, output_path, input_dir, warning_path,
 
 
 def sanitise_directory(directory, warning_path, af_method=None):
-    yaml_files = sorted(
+    json_files = sorted(
         entry.path
         for entry in os.scandir(directory)
-        if entry.is_file() and entry.name.lower().endswith(YAML_SUFFIXES)
+        if entry.is_file() and entry.name.lower().endswith(JSON_SUFFIXES)
     )
     fasta_files = sorted(
         entry.path
@@ -626,13 +505,12 @@ def sanitise_directory(directory, warning_path, af_method=None):
         if entry.is_file() and entry.name.lower().endswith(FASTA_SUFFIXES)
     )
     warnings = []
-    if af_method == "boltz":
-        for yaml_file in yaml_files:
-            changes = sanitise_boltz_yaml_in_place(yaml_file)
-            if changes:
-                warnings.append(
-                    f"Sanitised Boltz YAML file: {yaml_file} ({'; '.join(changes)})"
-                )
+    for json_file in json_files:
+        try:
+            validate_af3_json(json_file)
+        except (InputValidationError, OSError, ValueError) as error:
+            os.unlink(json_file)
+            warnings.append(f"Skipped incompatible JSON file {json_file}: {error}")
     seen_normalised_hashes = {}
     for fasta_file in fasta_files:
         try:
@@ -651,10 +529,12 @@ def sanitise_directory(directory, warning_path, af_method=None):
         seen_normalised_hashes[normalised_hash] = fasta_file
         if changes:
             warnings.append(f"Sanitised FASTA file: {fasta_file} ({'; '.join(changes)})")
-    if fasta_files and not any(os.path.exists(path) for path in fasta_files):
+    if (fasta_files or json_files) and not (
+        any(os.path.exists(path) for path in fasta_files + json_files)
+    ):
         write_warnings(warning_path, warnings)
         raise NoCompatibleInputsError(
-            "No compatible FASTA inputs remain after filtering"
+            "No compatible FASTA or AlphaFold3 JSON inputs remain after filtering"
         )
     write_warnings(warning_path, warnings)
 

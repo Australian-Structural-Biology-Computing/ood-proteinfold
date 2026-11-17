@@ -35,18 +35,17 @@ form:
     - samplesheet
     - samplesheet_help
     - run_name
+    - msa_tool
+    - full_dbs
     - af_method
     - af3_weights
     - af3_warning
-    - full_dbs
     - random_seed
     - colabfold_num_recycles
     - colabfold_advanced_options
     - colabfold_max_msa
     - colabfold_num_seeds
     - colabfold_use_dropout
-    - esmfold_num_recycles
-    - boltz_use_potentials
     - save_intermediates
     - generate_plddt_previews
     - citation_request
@@ -101,8 +100,9 @@ attributes:
         label: "Input Options"
         help: |
             • <b>Directory:</b> <code>/srv/scratch/z3141592/my_experiment/</code>
-            <br>• <b>Single file:</b> <code>protein.fasta</code>, <code>protein.yaml</code>, or <code>samplesheet.csv</code>
+            <br>• <b>Single file:</b> <code>protein.fasta</code>, <code>protein.json</code> (AlphaFold3 format), or <code>samplesheet.csv</code>
             <br>• <b>Sequence:</b> <code>NLYIQWLKDGGPSSGRPPPS</code> or <code>NLYIQWLKDGGPSSGRPPPS:MKTVRQERLKSDHELFRTHT</code>
+            <br>• <b>Rich entities</b> (RNA, DNA, ligands, modifications) are described in AlphaFold3-format JSON — see the <a href="https://github.com/google-deepmind/alphafold3/blob/main/docs/input.md">AlphaFold3 input format documentation</a>. One job per file.
             <br>📖 <a href="https://unsw.sharepoint.com/sites/StructuralBiologyFacility-UserDocumentation/SitePages/ProteinFold-User-Guide.aspx?ga=1#preparing-your-inputs">User Guide</a> for advanced options.
     run_name:
         widget: "text_field"
@@ -117,30 +117,66 @@ attributes:
         widget: "select"
         label: "Method"
         help: |
-            <ul>
-                <li><b>Boltz</b> High accuracy, Faster; Open AlphaFold3 method - <a href="https://doi.org/10.1101/2024.11.19.624167">Boltz-1 paper</a> <a href="https://doi.org/10.1101/2025.06.14.659707">Boltz-2 paper</a>
-                    <ul>
-                        <li><i>We use the <a href="https://doi.org/10.1101/2025.10.29.684571">LMI4Boltz</a> implementation on Katana, which reduces VRAM requirements and allows larger structure predictions.</i></li>
-                    </ul>
-                </li>
-                <li><b>AlphaFold2.3</b> High accuracy, Slower - <a href="https://doi.org/10.1038/s41586-021-03819-2">AlphaFold2 paper</a></li>
-                <li><b>AlphaFold3</b> High accuracy, Restricted use - <a href="https://doi.org/10.1038/s41586-024-07487-w">AlphaFold3 paper</a></li>
-                <li><b>ColabFold</b> High accuracy - <a href="https://doi.org/10.1038/s41592-022-01488-1">ColabFold paper</a></li>
-                <li><b>ESMFold</b> Medium/Low accuracy, Fastest; No evolutionary sequence calculations - <a href="https://doi.org/10.1126/science.ade2574">ESMFold paper</a></li>
-            </ul>
+            Prediction backend. The AlphaFold3-style backends accept rich entities
+            (RNA, DNA, ligands) via AlphaFold3-format JSON inputs
+            (<a href="https://github.com/google-deepmind/alphafold3/blob/main/docs/input.md">input format</a>).
         options:
-            - ["Boltz", "boltz", {data-hide-full_dbs: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
-            - ["AlphaFold2", "alphafold2", {data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
-            - ["AlphaFold3", "alphafold3", {data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true}]
-            - ["ColabFold", "colabfold", {data-hide-full_dbs: true, data-hide-esmfold_num_recycles: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
-            - ["ESMFold", "esmfold", {data-hide-full_dbs: true, data-hide-random_seed: true, data-hide-colabfold_num_recycles: true, data-hide-colabfold_advanced_options: true, data-hide-colabfold_num_seeds: true, data-hide-colabfold_use_dropout: true, data-hide-colabfold_max_msa: true, data-hide-boltz_use_potentials: true, data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["AlphaFold2", "alphafold2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["AlphaFold3", "alphafold3"]
+            - ["Boltz2", "boltz2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["ESMFold2", "esmfold2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["Chai1", "chai1", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["Protenix2", "protenix2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["OpenFold3", "openfold3", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["OpenBind0", "openbind0", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["IntelliFold2", "intellifold2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["OpenDDE", "opendde", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["RosettaFold3", "rosettafold3", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
         display: true
 
     af3_weights:
         widget: "path_selector"
-        label: "AlphaFold3 Weights"
-        placeholder: "Enter path to af3.bin"
+        label: "AlphaFold3 Weights Directory"
+        placeholder: "Enter path to your AlphaFold3 weights directory"
         required: true
+        help: |
+            Path to a ColabFold2 weights root holding the licensed AlphaFold3
+            parameters (<code>params/af3/alphafold3</code> layout). Every other method
+            silently uses the shared weights under the proteinfold database path;
+            AlphaFold3 requires user-provided weights because of Google DeepMind's
+            terms of use (see the warning below).
+
+    msa_tool:
+        widget: "select"
+        label: "MSA Generator"
+        options:
+            - ["ColabFold search (MMseqs2)", "colabfold_search", {data-hide-full_dbs: true}]
+            - ["AlphaFold2 pipeline (JackHMMER/hhblits)", "alphafold2_msa"]
+            - ["AlphaFold3 data pipeline", "alphafold3_msa", {data-hide-full_dbs: true}]
+        value: "colabfold_search"
+        display: true
+        help: |
+            MSA generation is independent of the prediction method; all three generators
+            convert their output to the format each backend consumes.
+            <ul>
+                <li><b>ColabFold search (MMseqs2)</b> Fast local MMseqs2 search against the shared ColabFold databases. Recommended default.</li>
+                <li><b>AlphaFold2 pipeline</b> Upstream AlphaFold2 MSA pipeline (JackHMMER/hhblits with template search). Slower; select the MSA Search Database below. Protein templates only.</li>
+                <li><b>AlphaFold3 data pipeline</b> Upstream AlphaFold3 feature pipeline (includes RNA and ligand databases). Slowest; recommended for AlphaFold3 runs with rich entities.</li>
+            </ul>
+
+    full_dbs:
+        widget: "select"
+        label: "MSA Search Database"
+        options:
+            - ["Reduced", "reduced"]
+            - ["Full", "full"]
+        display: true
+        help: |
+            Only used by the AlphaFold2 MSA pipeline generator. Search the full bfd database with JackHMMER (slower) or cluster representatives with hhblits (faster)
+            <ul>
+                <li><b>Full</b> High accuracy, slower</li>
+                <li><b>Reduced</b> Optimised for speed</li>
+            </ul>
 
     af3_warning:
         class: "d-none"
@@ -155,36 +191,22 @@ attributes:
               </ul>
             </div>
 
-    full_dbs:
-        widget: "select"
-        label: "MSA Search Database"
-        options:
-            - ["Reduced", "reduced"]
-            - ["Full", "full"]
-        display: true
-        help: |
-            Search the full bfd database with hhblits (slower) or cluster representatives with JackHMMER (faster)
-            <ul>
-                <li><b>Full</b> High accuracy, slower</li>
-                <li><b>Reduced</b> Optimised for speed</li>
-            </ul>
-
     colabfold_num_recycles:
         widget: "number_field"
-        label: "ColabFold Recycles"
+        label: "Recycles"
         value: 3
         min: 1
         max: 20
         help: |
-            Higher values may improve quality but increase runtime.
+            Number of recycles used by all prediction methods. Higher values may improve quality but increase runtime.
 
     colabfold_advanced_options:
         widget: "check_box"
-        label: "ColabFold Conformational Sampling"
+        label: "Conformational Sampling"
         checked_value: "yes"
         unchecked_value: "no"
         help: |
-            Expose advanced ColabFold options for conformational sampling by varying seeds, dropout, and MSA depth.
+            Expose advanced options for conformational sampling by varying seeds, dropout, and MSA depth. Supported by the ColabFold2 backends that implement these sampling controls.
             <br>📖 <a href="https://www.ebi.ac.uk/training/online/courses/alphafold/advanced-modeling-and-applications-of-predicted-protein-structures/customising-alphafold-structure-predictions/">ColabFold guide</a>
             <br>📄 Background: <a href="https://elifesciences.org/articles/75751">del Alamo et al. 2022</a>
 
@@ -198,7 +220,7 @@ attributes:
 
     colabfold_max_msa:
         widget: "select"
-        label: "ColabFold Max MSA"
+        label: "Max MSA"
         options:
             - ["auto", "auto"]
             - ["512:1024", "512:1024"]
@@ -212,7 +234,7 @@ attributes:
 
     colabfold_num_seeds:
         widget: "select"
-        label: "ColabFold Number of Seeds"
+        label: "Number of Seeds"
         options:
             - ["1", "1"]
             - ["2", "2"]
@@ -221,33 +243,15 @@ attributes:
             - ["16", "16"]
         value: "1"
         help: |
-            Number of seeds to run for ColabFold sampling. Higher values increase runtime and produce more sampled conformations.
+            Number of seeds to sample. Higher values increase runtime and produce more sampled conformations.
 
     colabfold_use_dropout:
         widget: "check_box"
-        label: "ColabFold Dropout"
+        label: "Dropout"
         checked_value: "true"
         unchecked_value: "false"
         help: |
             Enable dropout during inference to increase sampling diversity.
-
-    esmfold_num_recycles:
-        widget: "number_field"
-        label: "ESMFold Recycles"
-        value: 4
-        min: 1
-        max: 20
-        help: |
-            Higher values may improve quality but increase runtime.
-
-    boltz_use_potentials:
-        widget: "select"
-        label: "Boltz Potentials"
-        options:
-            - ["Disabled", "false"]
-            - ["Enabled", "true"]
-        help: |
-            Enable physics-based potentials to improve physical validity of predicted outputs (additional memory and runtime cost).
 
     save_intermediates:
         widget: "check_box"
@@ -261,7 +265,7 @@ attributes:
                             <span><b>Warning!</b> Enabling this can significantly increase output size especially for AlphaFold2. Ensure that your scratch storage is sufficient and consider cleaning up the files after use.</span>
                         </div>
                         <div id="save_intermediates_enforced" class="d-none" role="status" aria-live="polite" style="margin-top:0.5rem; font-style: italic; color: #5B5050;">
-                            This option is enabled and locked while ColabFold conformational sampling is active.
+                            This option is enabled and locked while conformational sampling is active.
                         </div>
 
     generate_plddt_previews:

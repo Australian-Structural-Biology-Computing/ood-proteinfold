@@ -1,11 +1,15 @@
 # ood-proteinfold (OnDemand App)
 
-`ood-proteinfold` is an [Open OnDemand](https://openondemand.org/) interactive app for computational protein structure prediction using [Proteinfold](https://nf-co.re/proteinfold/) ([AlphaFold2](https://github.com/google-deepmind/alphafold/), [Boltz](https://github.com/jwohlwend/boltz/), [ColabFold](https://github.com/sokrypton/ColabFold) and [ESMFold](https://github.com/facebookresearch/esm) originally built for [UNSW's Katana HPC](https://www.unsw.edu.au/research/facilities-and-infrastructure/find-an-instrument/restech-instruments/katana).
+`ood-proteinfold` is an [Open OnDemand](https://openondemand.org/) interactive app for computational protein structure prediction using the single-workflow [Proteinfold](https://nf-co.re/proteinfold/) pipeline (AlphaFold2, AlphaFold3, Boltz2, ESMFold2 and the other [ColabFold2](https://github.com/sokrypton/ColabFold) backends: Chai1, Protenix2, OpenFold3, OpenBind0, IntelliFold2, OpenDDE and RosettaFold3) originally built for [UNSW's Katana HPC](https://www.unsw.edu.au/research/facilities-and-infrastructure/find-an-instrument/restech-instruments/katana).
+
+> This branch (`single-workflow`) targets the `single-workflow` branch of the proteinfold pipeline, where `--mode` selects a ColabFold2 backend (all structure prediction runs through the pipeline's `COLABFOLD2_INFERENCE` process) and `--msa_tool` selects the MSA generator. The app exposes all three generators — ColabFold search (MMseqs2), the AlphaFold2 pipeline (JackHMMER/hhblits) and the AlphaFold3 data pipeline — selectable independently for every method, defaulting to the fast MMseqs2 search.
 
 ## Features
 
 - Predict protein structures from amino acid sequences, FASTA files, or samplesheets.
-- Supports multiple prediction methods found within [nf-core/proteinfold](https://nf-co.re/proteinfold/).
+- Supports AlphaFold2, AlphaFold3, Boltz2, ESMFold2 and the additional ColabFold2 backends through the single-workflow pipeline.
+- Optional conformational sampling (seed count, dropout, MSA depth) available for every method.
+- MSA generation selectable per run: ColabFold search (MMseqs2), the AlphaFold2 pipeline, or the AlphaFold3 data pipeline.
 - Customisable run parameters via web form.
 - Results accessible via web interface.
 - Optionally generates pLDDT-coloured mugshot images for final/top-ranked structures (see [pLDDT mugshot images](#plddt-mugshot-images)).
@@ -40,7 +44,7 @@ To deploy ProteinFold on your own Open OnDemand instance:
 2. **Edit files to match institutional settings**:
    - Update `submit.yml.erb` with your facility-specific settings.
    - Change the cluster in `form.yml.erb` to match your HPC.
-   - Create `kod_proteinfold-${RUN_ENVIRONMENT}.config` files for proteinfold-specific nextflow configurations. Or remove this line from `script.sh.erb` if not needed.
+   - Create `kod_proteinfold-${RUN_ENVIRONMENT}.config` files for proteinfold-specific nextflow configurations. The single-workflow-adapted UNSW Katana profile is maintained as `infra_katana.config` alongside this app; deploy it to `${PROJECT_ROOT}/kod_proteinfold-prod.config`. Or remove this line from `script.sh.erb` if not needed.
    - Create a `template/.env` file to change any of these default parameters:
 
 ```
@@ -57,6 +61,21 @@ PROJECT_ROOT=/srv/scratch/sbf-pipelines/proteinfold
 
 # Database path for structure prediction modules
 DB_PATH=/srv/scratch/sbf-pipelines/proteinfold/dbs
+
+# The single-workflow pipeline expects, under DB_PATH: the ColabFold search
+# databases (colabfold_envdb/, colabfold_uniref30/), the AlphaFold2 MSA
+# databases (for the alphafold2_msa generator), the AlphaFold3 data-pipeline
+# databases (for alphafold3_msa), plus a colabfold2_models/ directory holding
+# the ColabFold2 model weights (params/af3/<model> layout) for every exposed
+# backend.
+# The ColabFold2 model weights are provisioned under
+# /srv/scratch/sbf-pipelines/proteinfold/colabfold2_params with
+# scripts/provision_colabfold2_params.sh (see below) and symlinked into the
+# database path as colabfold2_models so the pipeline finds them implicitly.
+# No weights argument is passed for those methods -- the job script stays
+# silent, exactly as --db is handled. Only AlphaFold3 asks the user for a
+# weights directory (licensed weights); the job script then passes it as
+# --colabfold2_params_path.
 
 # Local staged deployment. Leave REVISION empty when PROJECT is a local path.
 PROJECT=${PROJECT_ROOT}/releases/current
@@ -154,6 +173,37 @@ pip install samplesheet-utils==1.3.4
 ```
 
 Update the paths in `.env` if your environment is elsewhere.
+
+### ColabFold2 model weights
+
+`scripts/provision_colabfold2_params.sh` downloads the ColabFold2 model weights
+for every backend the app exposes (fp32) into a shared weights root and
+validates them with the pipeline's own `ensure_weights`:
+
+```bash
+scripts/provision_colabfold2_params.sh /srv/scratch/sbf-pipelines/proteinfold/colabfold2_params
+```
+
+The root holds the AlphaFold3-family checkpoints under `params/af3/<model>/`
+(with the pipeline's revision-qualified `download_<model>_fp32*_finished.txt`
+completion markers), the shared CCD components under `params/af3/libcifpp/`,
+and the AlphaFold2 parameter sets under `params/`. Downloads use `curl` on the
+host because the HuggingFace CDN is far faster than the container's
+single-stream downloader; nothing is fetched when a completion marker is
+already present, so the script is safe to re-run.
+
+Expose it to runs by symlinking it into the database path (the pipeline looks
+for a `colabfold2_models` directory next to the ColabFold search databases):
+
+```bash
+ln -sfn /srv/scratch/sbf-pipelines/proteinfold/colabfold2_params \
+    /srv/scratch/sbf-pipelines/proteinfold/dbs/colabfold2_models
+```
+
+Note: AlphaFold3 weights carry Google DeepMind's terms of use (no commercial
+use); the app surfaces that warning to users at submission time and asks for a
+user-provided weights directory, since the shared root may not hold a licence
+covering every user.
 
 ## Citation
 

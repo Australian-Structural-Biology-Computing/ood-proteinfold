@@ -8,29 +8,22 @@
   const HEADERLESS_SEQUENCE_ID_LENGTH = 6;
   const AMINO_ACID_SEQUENCE_PATTERN = /^[ACDEFGHIKLMNPQRSTVWYX]+$/;
   const ENTITY_TYPES = new Set(["protein", "ccd", "smiles", "dna", "rna"]);
-  const NON_PROTEIN_METHODS = new Set(["alphafold3", "boltz"]);
-  const METHOD_TOKEN_LIMITS = {
-    boltz: {
-      title: "Boltz",
-      limit: 5000
-    },
-    alphafold3: {
-      title: "AlphaFold3",
-      limit: 5000,
-    },
-    alphafold2: {
-      title: "AlphaFold2",
-      limit: 4000
-    },
-    colabfold: {
-      title: "ColabFold",
-      limit: 4000
-    },
-    esmfold: {
-      title: "ESMFold",
-      limit: 600
-    }
-  };
+  // AF3-style backends accept rich entities (RNA, DNA, ligands) via their
+  // AlphaFold3-format JSON inputs; AlphaFold2 and ESMFold2 are protein-only.
+  const NON_PROTEIN_METHODS = new Set([
+    "alphafold3",
+    "boltz2",
+    "chai1",
+    "protenix2",
+    "openfold3",
+    "openbind0",
+    "intellifold2",
+    "opendde",
+    "rosettafold3"
+  ]);
+  // Approximate token budget shared by the ColabFold2 prediction backends;
+  // inputs longer than this are warned about but not blocked.
+  const APPROXIMATE_TOKEN_LIMIT = 5000;
 
   const parseTruthy = (value) => {
     if (value === null || value === undefined) return false;
@@ -268,11 +261,7 @@
       });
 
       const methodControl = getFieldControl("af_method", "select");
-      const showAdvancedColabfoldOptions =
-        methodControl &&
-        methodControl.value === "colabfold" &&
-        advancedCheckbox &&
-        advancedCheckbox.checked;
+      const showAdvancedColabfoldOptions = advancedCheckbox && advancedCheckbox.checked;
 
       COLABFOLD_ADVANCED_HIDE_TARGETS.forEach((target) => {
         const previous = fieldHiddenState.get(target) || false;
@@ -306,46 +295,60 @@
   onPageLoad(initResumeId);
   onPageLoad(initDynamicHide);
 
-  const initMethodTokenLimitPanel = () => {
-    const methodControl = getFieldControl("af_method", "select");
-    if (!methodControl) return;
+  // Visual structure: rule-line headings introduce the MSA generation and
+  // structure prediction groups, and the conformational sampling fields are
+  // drawn together inside a bordered box (pattern adopted from
+  // ood-proteindesign).
+  const initFormSectionHeadings = () => {
+    const style = document.createElement("style");
+    style.textContent =
+      ".ood-form-section-heading { margin: 1.5rem 0 0.75rem; padding-bottom: 0.35rem; border-bottom: 2px solid #6c757d; font-size: 1.15rem; font-weight: 600; }";
+    document.head.appendChild(style);
 
-    const container = getFieldContainer(methodControl);
-    if (!container) return;
+    const sections = [
+      ["msa_tool", "MSA Generation"],
+      ["af_method", "Structure Prediction"]
+    ];
 
-    let panel = document.getElementById("af_method_token_limits_panel");
-    if (!panel) {
-      panel = document.createElement("div");
-      panel.id = "af_method_token_limits_panel";
-      panel.className = "alert alert-info mt-2";
-      panel.setAttribute("role", "status");
-      panel.setAttribute("aria-live", "polite");
-      container.insertAdjacentElement("afterend", panel);
-    }
+    sections.forEach(([fieldName, label]) => {
+      const field = getFieldElements(fieldName)[0];
+      const container = getFieldContainer(field);
+      if (!container || container.dataset.oodSectionHeadingBound === "1") return;
 
-    const update = () => {
-      const info = METHOD_TOKEN_LIMITS[methodControl.value];
-      if (!info) {
-        panel.hidden = true;
-        panel.innerHTML = "";
-        return;
-      }
-
-      panel.innerHTML = `
-        ${info.title} approximate length limit: <strong>${info.limit.toLocaleString()}</strong>
-      `;
-      panel.hidden = false;
-    };
-
-    if (methodControl.dataset.oodTokenPanelBound !== "1") {
-      methodControl.addEventListener("change", update);
-      methodControl.dataset.oodTokenPanelBound = "1";
-    }
-
-    update();
+      const heading = document.createElement("h3");
+      heading.className = "ood-form-section-heading";
+      heading.textContent = label;
+      container.parentNode.insertBefore(heading, container);
+      container.dataset.oodSectionHeadingBound = "1";
+    });
   };
 
-  onPageLoad(initMethodTokenLimitPanel);
+  const initConformationalSamplingSection = () => {
+    const style = document.createElement("style");
+    style.textContent =
+      ".ood-sampling-section { margin: 0.75rem 0 1rem; padding: 0.75rem 1rem 0.25rem; border: 1px solid #adb5bd; border-radius: 0.375rem; background-color: rgba(248, 249, 250, 0.45); }";
+    document.head.appendChild(style);
+
+    const checkbox = getFieldCheckbox("colabfold_advanced_options");
+    const controllerContainer = getFieldContainer(checkbox);
+    if (!controllerContainer || controllerContainer.dataset.oodSamplingSectionBound === "1") return;
+
+    const targetNames = ["colabfold_num_seeds", "colabfold_use_dropout", "colabfold_max_msa"];
+    const targetContainers = targetNames
+      .map((name) => getFieldContainer(getFieldElements(name)[0]))
+      .filter((container, index, containers) => container && containers.indexOf(container) === index);
+
+    const section = document.createElement("div");
+    section.className = "ood-sampling-section";
+    controllerContainer.parentNode.insertBefore(section, controllerContainer);
+    section.appendChild(controllerContainer);
+    targetContainers.forEach((container) => section.appendChild(container));
+    controllerContainer.dataset.oodSamplingSectionBound = "1";
+  };
+
+  onPageLoad(initFormSectionHeadings);
+  onPageLoad(initConformationalSamplingSection);
+
 
   const initSaveIntermediatesWarning = () => {
     const checkbox = getFieldCheckbox('save_intermediates');
@@ -370,9 +373,6 @@
     const advCheckbox = getFieldCheckbox('colabfold_advanced_options');
     if (!advCheckbox) return;
 
-    const methodControl = getFieldControl('af_method', 'select');
-    if (!methodControl) return;
-
     const saveCheckbox = getFieldCheckbox('save_intermediates');
     if (!saveCheckbox) return;
 
@@ -390,18 +390,15 @@
     };
 
     const evaluate = () => {
-      const isColabfold = methodControl.value === 'colabfold';
-      if (advCheckbox.checked && isColabfold) applyLock(); else releaseLock();
+      // Conformational sampling publishes intermediate structures, so the
+      // save-intermediates option is locked on whenever sampling is enabled,
+      // for every method.
+      if (advCheckbox.checked) applyLock(); else releaseLock();
     };
 
     if (advCheckbox.dataset.oodEnforceBound !== '1') {
       advCheckbox.addEventListener('change', evaluate);
       advCheckbox.dataset.oodEnforceBound = '1';
-    }
-
-    if (methodControl.dataset.oodEnforceBound !== '1') {
-      methodControl.addEventListener('change', evaluate);
-      methodControl.dataset.oodEnforceBound = '1';
     }
 
     // run once to sync state
@@ -419,11 +416,9 @@
     const fieldContainer = getFieldContainer(input);
     const fileKinds = [
       [/\.fa(?:sta)?$/i, "fasta"],
-      [/\.ya?ml$/i, "yaml"],
+      [/\.json$/i, "json"],
       [/\.csv$/i, "csv"]
     ];
-    const boltzEntityTypes = new Set(["protein", "dna", "rna", "ligand"]);
-    const boltzPolymerTypes = new Set(["protein", "dna", "rna"]);
     const entityPatterns = {
       dna: /^[ACTGN]+$/,
       rna: /^[ACUGN]+$/,
@@ -590,137 +585,31 @@
       return `/${parts.filter(Boolean).join("/")}`;
     };
 
-    const unquoteYamlScalar = (value) => {
-      const trimmed = value.trim();
-      if (
-        trimmed.length >= 2 &&
-        ((trimmed.startsWith("'") && trimmed.endsWith("'")) ||
-          (trimmed.startsWith('"') && trimmed.endsWith('"')))
-      ) {
-        return trimmed.slice(1, -1);
+    const validateAf3Json = (contents, label) => {
+      let job;
+      try {
+        job = JSON.parse(contents);
+      } catch (error) {
+        throw new Error(`${label} is not valid JSON.`);
       }
-      return trimmed;
-    };
-
-    const parseYamlStringOrList = (value, label) => {
-      const trimmed = value.trim();
-      const tokens = trimmed.startsWith("[") && trimmed.endsWith("]")
-        ? trimmed.slice(1, -1).split(",").map((token) => token.trim())
-        : [trimmed];
-      if (!tokens.length || tokens.some((token) => !token)) {
-        throw new Error(`${label} must contain one or more strings.`);
+      if (Array.isArray(job)) {
+        if (job.length !== 1) {
+          throw new Error(
+            `${label} contains ${job.length} AlphaFold3 jobs; provide one job per file.`
+          );
+        }
+        job = job[0];
       }
-      return tokens.map((token) => {
-        const unquoted = unquoteYamlScalar(token);
-        const quoted = unquoted !== token;
-        if (
-          !quoted &&
-          /^(?:null|true|false|~|[-+]?(?:\d+(?:\.\d*)?|\.\d+))$/i.test(token)
-        ) {
-          throw new Error(`${label} must contain strings.`);
-        }
-        return unquoted;
-      });
-    };
-
-    const validateBoltzYaml = (contents, label) => {
-      const entries = [];
-      let sequencesIndent = null;
-      let entryIndent = null;
-      let currentEntry = null;
-      contents.split(/\r\n|\r|\n/).forEach((rawLine) => {
-        const line = rawLine.replace(/\s+#.*$/, "");
-        if (!line.trim()) return;
-        const indent = line.length - line.trimStart().length;
-        if (/^sequences:\s*$/.test(line)) {
-          sequencesIndent = indent;
-          entryIndent = null;
-          currentEntry = null;
-        } else if (sequencesIndent !== null && indent <= sequencesIndent) {
-          sequencesIndent = null;
-          currentEntry = null;
-        } else if (sequencesIndent !== null) {
-          const entity = line.trim().match(/^-\s+([^:]+):\s*$/);
-          const field = line.trim().match(/^(id|sequence|smiles|ccd):\s*(.+)$/);
-          if (entity && (entryIndent === null || indent === entryIndent)) {
-            entryIndent ??= indent;
-            currentEntry = { type: entity[1], fields: {} };
-            entries.push(currentEntry);
-          } else if (currentEntry && field) {
-            currentEntry.fields[field[1]] = field[2].trim();
-          }
-        }
-      });
-      if (!entries.length) {
-        throw new Error(`${label} must contain a non-empty sequences list.`);
+      if (!job || typeof job !== "object" || Array.isArray(job)) {
+        throw new Error(`${label} is not an AlphaFold3 JSON job object.`);
       }
-      const chainIds = new Set();
-      let removedWhitespace = 0;
-      let removedTerminalStops = 0;
-      entries.forEach(({ type, fields }, index) => {
-        const entry = `${label} ${type} entry ${index + 1}`;
-        if (!boltzEntityTypes.has(type)) {
-          throw new Error(`${label} has unsupported Boltz entity type: ${type}.`);
-        }
-        if (!fields.id || fields.id === "[]") {
-          throw new Error(`${entry} is missing id.`);
-        }
-        parseYamlStringOrList(fields.id, `${entry} id`).forEach((id) => {
-          if (!id || chainIds.has(id)) {
-            throw new Error(`${label} chain ids must be unique and non-empty.`);
-          }
-          chainIds.add(id);
-        });
-        if (boltzPolymerTypes.has(type) && !fields.sequence) {
-          throw new Error(`${entry} is missing sequence.`);
-        }
-        if (type === "ligand" && Boolean(fields.smiles) === Boolean(fields.ccd)) {
-          throw new Error(`${entry} must contain exactly one of smiles or ccd.`);
-        }
-
-        if (boltzPolymerTypes.has(type)) {
-          const rawSequence = unquoteYamlScalar(fields.sequence);
-          const compactSequence = removeWhitespace(rawSequence);
-          if (!compactSequence) throw new Error(`${entry} is missing sequence.`);
-          removedWhitespace += rawSequence.length - compactSequence.length;
-          const sequence = type === "protein"
-            ? stripTerminalStops(compactSequence)
-            : compactSequence;
-          if (type === "protein") {
-            removedTerminalStops += compactSequence
-              .split(":")
-              .filter((chain) => chain.endsWith("*")).length;
-          }
-          validateEntitySequence(type, sequence, entry, false);
-        }
-
-        if (type === "ligand" && fields.smiles) {
-          const rawSmiles = unquoteYamlScalar(fields.smiles);
-          const compactSmiles = removeWhitespace(rawSmiles);
-          if (!compactSmiles) throw new Error(`${entry} is missing smiles.`);
-          removedWhitespace += rawSmiles.length - compactSmiles.length;
-          validateEntitySequence("smiles", compactSmiles, entry);
-        }
-        if (type === "ligand" && fields.ccd) {
-          parseYamlStringOrList(fields.ccd, `${entry} ccd`).forEach((code) => {
-            const normalisedCode = code.trim();
-            if (!normalisedCode) throw new Error(`${entry} ccd must not be empty.`);
-            removedWhitespace += code.length - normalisedCode.length;
-          });
-        }
-      });
-      const changes = [];
-      if (removedTerminalStops) {
-        changes.push(
-          `terminal stop codon will be removed from ${removedTerminalStops} Boltz YAML sequence(s)`
+      if (!Array.isArray(job.sequences) || job.sequences.length === 0) {
+        throw new Error(
+          `${label} has no sequences list; see the AlphaFold3 input format documentation ` +
+            "(https://github.com/google-deepmind/alphafold3/blob/main/docs/input.md)."
         );
       }
-      if (removedWhitespace) {
-        changes.push(
-          `${removedWhitespace} whitespace character(s) will be removed from Boltz YAML input data`
-        );
-      }
-      return changes;
+      return [];
     };
 
     const inferEntityType = (header, sequence) => {
@@ -894,11 +783,10 @@
       if (terminalStops) {
         messages.push(`Manual sequence: terminal stop codon will be removed from ${terminalStops} chain(s).`);
       }
-      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
       const length = sequence.replace(/:/g, "").length;
-      if (limit && length > limit.limit) {
+      if (length > APPROXIMATE_TOKEN_LIMIT) {
         messages.push(
-          `Manual sequence length ${length.toLocaleString()} residues exceeds the ${limit.title} approximate limit of ${limit.limit.toLocaleString()}.`
+          `Manual sequence length ${length.toLocaleString()} residues exceeds the approximate ${APPROXIMATE_TOKEN_LIMIT.toLocaleString()}-token budget shared by the prediction backends.`
         );
       }
       return { messages, severity: messages.length ? "review" : "pass" };
@@ -912,7 +800,6 @@
     const analyseFiles = (files) => {
       const messages = [];
       const seen = new Map();
-      const limit = METHOD_TOKEN_LIMITS[methodControl?.value];
       const collection = files.some((file) => file.collectionInput);
       let runnableInputs = 0;
       let severity = "pass";
@@ -922,10 +809,6 @@
       };
 
       files.forEach((file) => {
-        if (file.ignoredForMethod) {
-          add(`${file.label}: YAML input will be ignored unless Boltz is selected.`, "review");
-          return;
-        }
         if (file.symbolicLink) {
           runnableInputs += 1;
           add(
@@ -938,13 +821,10 @@
           add(file.error, "error");
           return;
         }
-        if (file.kind === "yaml") {
-          if (methodControl?.value === "boltz") {
-            runnableInputs += 1;
-            if (file.changes?.length) add(`${file.label}: ${file.changes.join(", ")}.`);
-          } else {
-            add(`${file.label}: YAML input is only supported by Boltz.`, "error");
-          }
+        if (file.kind === "json") {
+          // Validation happens in checkFile; a JSON file that reaches this
+          // point parsed as a single AlphaFold3 job.
+          runnableInputs += 1;
           return;
         }
         if (methodControl?.value === "alphafold2" && file.hasUnknownProteinResidue) {
@@ -961,8 +841,8 @@
         if (unsupportedTypes.length) {
           add(
             file.collectionInput
-              ? `${file.label}: ${unsupportedTypes.join(", ")} input will be ignored unless AlphaFold3 or Boltz is selected.`
-              : `${file.label}: ${unsupportedTypes.join(", ")} input is only supported by AlphaFold3 or Boltz.`,
+              ? `${file.label}: ${unsupportedTypes.join(", ")} input will be ignored unless an AlphaFold3-style backend is selected.`
+              : `${file.label}: ${unsupportedTypes.join(", ")} input is only supported by the AlphaFold3-style backends.`,
             file.collectionInput ? "review" : "error"
           );
           return;
@@ -975,9 +855,9 @@
         runnableInputs += 1;
         seen.set(file.sequenceKey, file.label);
         if (file.changes.length) add(`${file.label}: ${file.changes.join(", ")}.`);
-        if (limit && file.sequenceLength > limit.limit) {
+        if (file.sequenceLength > APPROXIMATE_TOKEN_LIMIT) {
           add(
-            `${file.label}: total sequence length ${file.sequenceLength.toLocaleString()} residues exceeds the ${limit.title} approximate limit of ${limit.limit.toLocaleString()}.`,
+            `${file.label}: total sequence length ${file.sequenceLength.toLocaleString()} residues exceeds the approximate ${APPROXIMATE_TOKEN_LIMIT.toLocaleString()}-token budget shared by the prediction backends.`,
             "review"
           );
         }
@@ -1048,12 +928,8 @@
     };
     const prepareCollection = (files) =>
       files
-        .filter((file) => file.kind === "fasta" || file.kind === "yaml")
-        .map((file) => ({
-          ...file,
-          collectionInput: true,
-          ignoredForMethod: file.kind === "yaml" && methodControl?.value !== "boltz"
-        }));
+        .filter((file) => file.kind === "fasta" || file.kind === "json")
+        .map((file) => ({ ...file, collectionInput: true }));
     const mapWithConcurrency = async (items, callback, limit = 6) => {
       const results = Array(items.length);
       let nextIndex = 0;
@@ -1078,9 +954,10 @@
       return prepareCollection(await mapWithConcurrency(rows, async (row) => {
         const referencedPath = resolveSamplesheetPath(path, row.path);
         const file = await getDirectInputFile(referencedPath, signal, cache);
-        if (file.kind !== "fasta" && file.kind !== "yaml") {
+        if (file.kind !== "fasta" && file.kind !== "json") {
           throw new Error(
-            `Samplesheet row ${row.rowNumber} has unsupported input type: ${row.path}.`
+            `Samplesheet row ${row.rowNumber} has unsupported input type: ${row.path}. ` +
+              "Expected a FASTA or AlphaFold3 JSON file."
           );
         }
         return { ...file, label: `${file.label} (samplesheet row ${row.rowNumber})` };
@@ -1091,8 +968,8 @@
       if (file.ignoredForMethod || file.symbolicLink) return file;
       try {
         const contents = await fetchText(file, signal);
-        if (file.kind === "yaml") {
-          return { ...file, changes: validateBoltzYaml(contents, file.label) };
+        if (file.kind === "json") {
+          return { ...file, changes: validateAf3Json(contents, file.label) };
         }
         return { ...file, ...parseFasta(contents, file.label) };
       } catch (error) {
@@ -1118,9 +995,7 @@
         const files = await loadInputFiles(path, controller.signal);
         if (request !== requestNumber) return;
         if (!files.length) {
-          const expected = methodControl?.value === "boltz"
-            ? "FASTA or YAML input files"
-            : "FASTA files (.fa or .fasta)";
+          const expected = "FASTA or AlphaFold3 JSON input files (.fa, .fasta or .json)";
           lastCheckedFiles = null;
           render(errorResult(`No compatible ${expected} were found in this input.`));
           return;
