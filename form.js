@@ -295,6 +295,60 @@
   onPageLoad(initResumeId);
   onPageLoad(initDynamicHide);
 
+  // Visual structure: rule-line headings introduce the MSA generation and
+  // structure prediction groups, and the conformational sampling fields are
+  // drawn together inside a bordered box (pattern adopted from
+  // ood-proteindesign).
+  const initFormSectionHeadings = () => {
+    const style = document.createElement("style");
+    style.textContent =
+      ".ood-form-section-heading { margin: 1.5rem 0 0.75rem; padding-bottom: 0.35rem; border-bottom: 2px solid #6c757d; font-size: 1.15rem; font-weight: 600; }";
+    document.head.appendChild(style);
+
+    const sections = [
+      ["msa_tool", "MSA Generation"],
+      ["af_method", "Structure Prediction"]
+    ];
+
+    sections.forEach(([fieldName, label]) => {
+      const field = getFieldElements(fieldName)[0];
+      const container = getFieldContainer(field);
+      if (!container || container.dataset.oodSectionHeadingBound === "1") return;
+
+      const heading = document.createElement("h3");
+      heading.className = "ood-form-section-heading";
+      heading.textContent = label;
+      container.parentNode.insertBefore(heading, container);
+      container.dataset.oodSectionHeadingBound = "1";
+    });
+  };
+
+  const initConformationalSamplingSection = () => {
+    const style = document.createElement("style");
+    style.textContent =
+      ".ood-sampling-section { margin: 0.75rem 0 1rem; padding: 0.75rem 1rem 0.25rem; border: 1px solid #adb5bd; border-radius: 0.375rem; background-color: rgba(248, 249, 250, 0.45); }";
+    document.head.appendChild(style);
+
+    const checkbox = getFieldCheckbox("colabfold_advanced_options");
+    const controllerContainer = getFieldContainer(checkbox);
+    if (!controllerContainer || controllerContainer.dataset.oodSamplingSectionBound === "1") return;
+
+    const targetNames = ["colabfold_num_seeds", "colabfold_use_dropout", "colabfold_max_msa"];
+    const targetContainers = targetNames
+      .map((name) => getFieldContainer(getFieldElements(name)[0]))
+      .filter((container, index, containers) => container && containers.indexOf(container) === index);
+
+    const section = document.createElement("div");
+    section.className = "ood-sampling-section";
+    controllerContainer.parentNode.insertBefore(section, controllerContainer);
+    section.appendChild(controllerContainer);
+    targetContainers.forEach((container) => section.appendChild(container));
+    controllerContainer.dataset.oodSamplingSectionBound = "1";
+  };
+
+  onPageLoad(initFormSectionHeadings);
+  onPageLoad(initConformationalSamplingSection);
+
 
   const initSaveIntermediatesWarning = () => {
     const checkbox = getFieldCheckbox('save_intermediates');
