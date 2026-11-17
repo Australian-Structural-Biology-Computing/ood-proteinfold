@@ -308,46 +308,9 @@
   onPageLoad(initResumeId);
   onPageLoad(initDynamicHide);
 
-  const initMethodTokenLimitPanel = () => {
-    const methodControl = getFieldControl("af_method", "select");
-    if (!methodControl) return;
-
-    const container = getFieldContainer(methodControl);
-    if (!container) return;
-
-    let panel = document.getElementById("af_method_token_limits_panel");
-    if (!panel) {
-      panel = document.createElement("div");
-      panel.id = "af_method_token_limits_panel";
-      panel.className = "alert alert-info mt-2";
-      panel.setAttribute("role", "status");
-      panel.setAttribute("aria-live", "polite");
-      container.insertAdjacentElement("afterend", panel);
-    }
-
-    const update = () => {
-      const info = METHOD_TOKEN_LIMITS[methodControl.value];
-      if (!info) {
-        panel.hidden = true;
-        panel.innerHTML = "";
-        return;
-      }
-
-      panel.innerHTML = `
-        ${info.title} approximate length limit: <strong>${info.limit.toLocaleString()}</strong>
-      `;
-      panel.hidden = false;
-    };
-
-    if (methodControl.dataset.oodTokenPanelBound !== "1") {
-      methodControl.addEventListener("change", update);
-      methodControl.dataset.oodTokenPanelBound = "1";
-    }
-
-    update();
-  };
-
-  onPageLoad(initMethodTokenLimitPanel);
+  // Per-method approximate token limits (METHOD_TOKEN_LIMITS) are no longer
+  // shown as a banner; they back the preflight warnings raised when an input
+  // exceeds the length a backend can comfortably handle.
 
   const initSaveIntermediatesWarning = () => {
     const checkbox = getFieldCheckbox('save_intermediates');
@@ -919,7 +882,7 @@
 
       files.forEach((file) => {
         if (file.ignoredForMethod) {
-          add(`${file.label}: YAML input will be ignored unless Boltz is selected.`, "review");
+          add(`${file.label}: YAML input will be ignored unless Boltz2 is selected.`, "review");
           return;
         }
         if (file.symbolicLink) {
@@ -957,8 +920,8 @@
         if (unsupportedTypes.length) {
           add(
             file.collectionInput
-              ? `${file.label}: ${unsupportedTypes.join(", ")} input will be ignored unless AlphaFold3 or Boltz is selected.`
-              : `${file.label}: ${unsupportedTypes.join(", ")} input is only supported by AlphaFold3 or Boltz.`,
+              ? `${file.label}: ${unsupportedTypes.join(", ")} input will be ignored unless an AlphaFold3-style backend is selected.`
+              : `${file.label}: ${unsupportedTypes.join(", ")} input is only supported by the AlphaFold3-style backends.`,
             file.collectionInput ? "review" : "error"
           );
           return;
