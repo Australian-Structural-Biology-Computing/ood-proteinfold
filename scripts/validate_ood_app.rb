@@ -31,7 +31,7 @@ class TemplateContext
       samplesheet: "/tmp/samplesheet.csv",
       af_method: "alphafold2",
       msa_tool: "colabfold_search",
-      colabfold2_params_path: "",
+      af3_weights: "",
       full_dbs: "reduced",
       colabfold_num_recycles: 3,
       colabfold_advanced_options: "",

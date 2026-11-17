@@ -72,8 +72,10 @@ DB_PATH=/srv/scratch/sbf-pipelines/proteinfold/dbs
 # /srv/scratch/sbf-pipelines/proteinfold/colabfold2_params with
 # scripts/provision_colabfold2_params.sh (see below) and symlinked into the
 # database path as colabfold2_models so the pipeline finds them implicitly.
-# The app's "Model Weights Directory" field defaults to the shared root; users
-# can point it at their own weights copy instead.
+# No weights argument is passed for those methods -- the job script stays
+# silent, exactly as --db is handled. Only AlphaFold3 asks the user for a
+# weights directory (licensed weights); the job script then passes it as
+# --colabfold2_params_path.
 
 # Local staged deployment. Leave REVISION empty when PROJECT is a local path.
 PROJECT=${PROJECT_ROOT}/releases/current
@@ -199,7 +201,9 @@ ln -sfn /srv/scratch/sbf-pipelines/proteinfold/colabfold2_params \
 ```
 
 Note: AlphaFold3 weights carry Google DeepMind's terms of use (no commercial
-use); the app surfaces that warning to users at submission time.
+use); the app surfaces that warning to users at submission time and asks for a
+user-provided weights directory, since the shared root may not hold a licence
+covering every user.
 
 ## Citation
 

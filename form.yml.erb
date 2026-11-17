@@ -37,7 +37,7 @@ form:
     - run_name
     - af_method
     - msa_tool
-    - colabfold2_params_path
+    - af3_weights
     - af3_warning
     - full_dbs
     - random_seed
@@ -130,31 +130,30 @@ attributes:
                 <li><b>Chai1 / Protenix2 / OpenFold3 / OpenBind0 / IntelliFold2 / OpenDDE / RosettaFold3</b> Additional open ColabFold2 backends - see the <a href="https://github.com/sokrypton/ColabFold">ColabFold</a> documentation for entity support per backend.</li>
             </ul>
         options:
-            - ["AlphaFold2", "alphafold2", {data-hide-af3_warning: true}]
+            - ["AlphaFold2", "alphafold2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
             - ["AlphaFold3", "alphafold3"]
-            - ["Boltz2", "boltz2", {data-hide-af3_warning: true}]
-            - ["ESMFold2", "esmfold2", {data-hide-af3_warning: true}]
-            - ["Chai1", "chai1", {data-hide-af3_warning: true}]
-            - ["Protenix2", "protenix2", {data-hide-af3_warning: true}]
-            - ["OpenFold3", "openfold3", {data-hide-af3_warning: true}]
-            - ["OpenBind0", "openbind0", {data-hide-af3_warning: true}]
-            - ["IntelliFold2", "intellifold2", {data-hide-af3_warning: true}]
-            - ["OpenDDE", "opendde", {data-hide-af3_warning: true}]
-            - ["RosettaFold3", "rosettafold3", {data-hide-af3_warning: true}]
+            - ["Boltz2", "boltz2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["ESMFold2", "esmfold2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["Chai1", "chai1", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["Protenix2", "protenix2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["OpenFold3", "openfold3", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["OpenBind0", "openbind0", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["IntelliFold2", "intellifold2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["OpenDDE", "opendde", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
+            - ["RosettaFold3", "rosettafold3", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
         display: true
 
-    colabfold2_params_path:
+    af3_weights:
         widget: "path_selector"
-        label: "Model Weights Directory"
-        placeholder: "Required for AlphaFold3; otherwise the shared weights are used"
-        value: "/srv/scratch/sbf-pipelines/proteinfold/colabfold2_params"
-        required: false
+        label: "AlphaFold3 Weights Directory"
+        placeholder: "Enter path to your AlphaFold3 weights directory"
+        required: true
         help: |
-            Path to a ColabFold2 weights root (<code>params/af3/&lt;model&gt;</code> layout).
-            <b>Required for AlphaFold3</b>, which needs licensed weights supplied by the user
-            (see the warning below). For other methods, leave empty to reuse the complete
-            weights under the <code>colabfold2_models</code> directory inside the shared
-            proteinfold database path.
+            Path to a ColabFold2 weights root holding the licensed AlphaFold3
+            parameters (<code>params/af3/alphafold3</code> layout). Every other method
+            silently uses the shared weights under the proteinfold database path;
+            AlphaFold3 requires user-provided weights because of Google DeepMind's
+            terms of use (see the warning below).
 
     msa_tool:
         widget: "select"

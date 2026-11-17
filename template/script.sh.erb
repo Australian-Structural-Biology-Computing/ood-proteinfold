@@ -408,7 +408,7 @@ COLABFOLD_USE_DROPOUT="<%= context.colabfold_use_dropout %>"
 COLABFOLD_MAX_MSA="<%= context.colabfold_max_msa %>"
 SAVE_INTERMEDIATES="<%= context.save_intermediates %>"
 GENERATE_PLDDT_PREVIEWS="<%= context.generate_plddt_previews %>"
-COLABFOLD2_PARAMS_PATH="<%= context.colabfold2_params_path %>"
+AF3_WEIGHTS="<%= context.af3_weights %>"
 
 # UI enforces this when conformational sampling is active, but keep the
 # server-side override as a fallback in case the form state is inconsistent.
@@ -466,20 +466,23 @@ if [ -n "${COLABFOLD_RECYCLES}" ]; then
     ARGS="${ARGS} --colabfold_num_recycles ${COLABFOLD_RECYCLES}"
 fi
 
-# Optional shared ColabFold2 weights root. AlphaFold3 requires user-provided
-# licensed weights; for other methods, when empty the pipeline falls back to
-# complete weights under ${DB_PATH}/colabfold2_models, or downloads them
-# (which fails on Katana compute nodes without outbound network access).
-if [ -z "${COLABFOLD2_PARAMS_PATH}" ] && [ "${AF_METHOD}" == "alphafold3" ]; then
-    echo "ERROR: AlphaFold3 requires a path to a ColabFold2 weights directory."
-    exit 1
-fi
-if [ -n "${COLABFOLD2_PARAMS_PATH}" ]; then
-    if [ ! -d "${COLABFOLD2_PARAMS_PATH}" ] || [ ! -r "${COLABFOLD2_PARAMS_PATH}" ]; then
-        echo "ERROR: ColabFold2 weights directory is not readable: ${COLABFOLD2_PARAMS_PATH}"
+# Model weights: every method except AlphaFold3 silently uses the shared
+# ColabFold2 weights under ${DB_PATH}/colabfold2_models (the pipeline's
+# implicit fallback -- the app passes no weights argument at all, exactly as
+# --db is handled). AlphaFold3 requires user-provided licensed weights; the
+# value is only honoured for alphafold3 so a stale path left in the hidden
+# field after switching methods cannot redirect other modes at a weights root
+# that lacks their checkpoints.
+if [ "${AF_METHOD}" == "alphafold3" ]; then
+    if [ -z "${AF3_WEIGHTS}" ]; then
+        echo "ERROR: AlphaFold3 requires a path to user-provided AlphaFold3 weights."
         exit 1
     fi
-    ARGS="${ARGS} --colabfold2_params_path ${COLABFOLD2_PARAMS_PATH}"
+    if [ ! -d "${AF3_WEIGHTS}" ] || [ ! -r "${AF3_WEIGHTS}" ]; then
+        echo "ERROR: AlphaFold3 weights directory is not readable: ${AF3_WEIGHTS}"
+        exit 1
+    fi
+    ARGS="${ARGS} --colabfold2_params_path ${AF3_WEIGHTS}"
 fi
 
 # Conformational sampling (seeds, dropout, MSA depth): the flags are accepted
