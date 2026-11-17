@@ -36,10 +36,10 @@ form:
     - samplesheet_help
     - run_name
     - msa_tool
+    - full_dbs
     - af_method
     - af3_weights
     - af3_warning
-    - full_dbs
     - random_seed
     - colabfold_num_recycles
     - colabfold_advanced_options
@@ -162,6 +162,20 @@ attributes:
                 <li><b>AlphaFold3 data pipeline</b> Upstream AlphaFold3 feature pipeline (includes RNA and ligand databases). Slowest; recommended for AlphaFold3 runs with rich entities.</li>
             </ul>
 
+    full_dbs:
+        widget: "select"
+        label: "MSA Search Database"
+        options:
+            - ["Reduced", "reduced"]
+            - ["Full", "full"]
+        display: true
+        help: |
+            Only used by the AlphaFold2 MSA pipeline generator. Search the full bfd database with JackHMMER (slower) or cluster representatives with hhblits (faster)
+            <ul>
+                <li><b>Full</b> High accuracy, slower</li>
+                <li><b>Reduced</b> Optimised for speed</li>
+            </ul>
+
     af3_warning:
         class: "d-none"
         label: "AlphaFold3 Warning"
@@ -183,20 +197,6 @@ attributes:
         max: 20
         help: |
             Number of recycles used by all prediction methods. Higher values may improve quality but increase runtime.
-
-    full_dbs:
-        widget: "select"
-        label: "MSA Search Database"
-        options:
-            - ["Reduced", "reduced"]
-            - ["Full", "full"]
-        display: true
-        help: |
-            Only used by the AlphaFold2 MSA pipeline generator. Search the full bfd database with JackHMMER (slower) or cluster representatives with hhblits (faster)
-            <ul>
-                <li><b>Full</b> High accuracy, slower</li>
-                <li><b>Reduced</b> Optimised for speed</li>
-            </ul>
 
     colabfold_advanced_options:
         widget: "check_box"
