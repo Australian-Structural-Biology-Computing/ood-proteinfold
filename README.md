@@ -68,9 +68,12 @@ DB_PATH=/srv/scratch/sbf-pipelines/proteinfold/dbs
 # databases (for alphafold3_msa), plus a colabfold2_models/ directory holding
 # the ColabFold2 model weights (params/af3/<model> layout) for every exposed
 # backend.
-# Katana compute nodes have no outbound network access, so the weights must be
-# provisioned there in advance, or supplied per run via the app's optional
-# "Model Weights Directory" field (--colabfold2_params_path).
+# The ColabFold2 model weights are provisioned under
+# /srv/scratch/sbf-pipelines/proteinfold/colabfold2_params with
+# scripts/provision_colabfold2_params.sh (see below) and symlinked into the
+# database path as colabfold2_models so the pipeline finds them implicitly.
+# The app's "Model Weights Directory" field defaults to the shared root; users
+# can point it at their own weights copy instead.
 
 # Local staged deployment. Leave REVISION empty when PROJECT is a local path.
 PROJECT=${PROJECT_ROOT}/releases/current
@@ -168,6 +171,35 @@ pip install samplesheet-utils==1.3.4
 ```
 
 Update the paths in `.env` if your environment is elsewhere.
+
+### ColabFold2 model weights
+
+`scripts/provision_colabfold2_params.sh` downloads the ColabFold2 model weights
+for every backend the app exposes (fp32) into a shared weights root and
+validates them with the pipeline's own `ensure_weights`:
+
+```bash
+scripts/provision_colabfold2_params.sh /srv/scratch/sbf-pipelines/proteinfold/colabfold2_params
+```
+
+The root holds the AlphaFold3-family checkpoints under `params/af3/<model>/`
+(with the pipeline's revision-qualified `download_<model>_fp32*_finished.txt`
+completion markers), the shared CCD components under `params/af3/libcifpp/`,
+and the AlphaFold2 parameter sets under `params/`. Downloads use `curl` on the
+host because the HuggingFace CDN is far faster than the container's
+single-stream downloader; nothing is fetched when a completion marker is
+already present, so the script is safe to re-run.
+
+Expose it to runs by symlinking it into the database path (the pipeline looks
+for a `colabfold2_models` directory next to the ColabFold search databases):
+
+```bash
+ln -sfn /srv/scratch/sbf-pipelines/proteinfold/colabfold2_params \
+    /srv/scratch/sbf-pipelines/proteinfold/dbs/colabfold2_models
+```
+
+Note: AlphaFold3 weights carry Google DeepMind's terms of use (no commercial
+use); the app surfaces that warning to users at submission time.
 
 ## Citation
 
