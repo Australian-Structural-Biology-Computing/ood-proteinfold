@@ -265,6 +265,37 @@ function create_and_normalise_samplesheet() {
     sanitise_input samplesheet-ids "${SAMPLESHEET}" "$(pwd)/WARNING.txt" || true
 }
 
+function append_json_samplesheet_rows() {
+    # Append one id,fasta row per AlphaFold3 JSON file to an existing
+    # samplesheet. The job's name field provides the id, falling back to the
+    # file stem; exactly one job per file is required.
+    python3 - "$@" <<'PY'
+import csv, json, os, sys
+samplesheet = sys.argv[1]
+for path in sys.argv[2:]:
+    with open(path, encoding="utf-8-sig") as handle:
+        job = json.load(handle)
+    if isinstance(job, list):
+        if len(job) != 1:
+            raise SystemExit(f"ERROR: {path} contains {len(job)} AlphaFold3 jobs; provide one job per file.")
+        job = job[0]
+    if not isinstance(job, dict):
+        raise SystemExit(f"ERROR: {path} is not an AlphaFold3 JSON job object.")
+    name = job.get("name")
+    if not (isinstance(name, str) and name.strip()):
+        name = os.path.splitext(os.path.basename(path))[0]
+    csv.writer(open(samplesheet, "a", encoding="utf-8", newline="")).writerow([name, path])
+PY
+}
+
+function create_json_samplesheet() {
+    # Create an id,fasta samplesheet from AlphaFold3 JSON files (one job per row).
+    local samplesheet="$1"
+    shift
+    printf 'id,fasta\n' > "${samplesheet}"
+    append_json_samplesheet_rows "${samplesheet}" "$@"
+}
+
 # Check if the input is an amino acid sequence or a path
 raw_user_input="<%= context.samplesheet %>"
 user_input="$(printf '%s' "${raw_user_input}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
@@ -274,7 +305,8 @@ af_method="<%= context.af_method %>"
 MODE=""
 [[ "${sequence_input}" =~ ^[ACDEFGHIKLMNPQRSTVWYX]+(:[ACDEFGHIKLMNPQRSTVWYX]+)*$ ]] && MODE="MANUAL_INPUT"
 [[ "${user_input,,}" =~ \.csv$ ]] && MODE="SAMPLESHEET_INPUT"
-[[ "${user_input,,}" =~ \.(fa(sta)?|y(a)?ml)$ ]] && MODE="FASTA_INPUT"
+[[ "${user_input,,}" =~ \.json$ ]] && MODE="JSON_INPUT"
+[[ "${user_input,,}" =~ \.(fa|fasta)$ ]] && MODE="FASTA_INPUT"
 [[ "${MODE}" == "" ]] && MODE="DIRECTORY"
 
 if [ "${MODE}" == "MANUAL_INPUT" ] && [ "${RESUME_RUN}" == "false" ]; then
@@ -293,13 +325,12 @@ fi
 
 echo "${MODE}"
 
-# Check YAML/YML compatibility - only supported by Boltz2
-if [ "${MODE}" == "FASTA_INPUT" ] && [[ "${user_input,,}" =~ \.(yaml|yml)$ ]]; then
-    if [ "${af_method}" != "boltz2" ]; then
-        echo "ERROR: YAML/YML input files are only supported by Boltz2."
-        echo "Current method: ${af_method}"
-        exit 1
-    fi
+# Reject YAML/YML inputs outright: the single-workflow pipeline's backends
+# consume FASTA or AlphaFold3-format JSON, not Boltz YAML.
+if [[ "${user_input,,}" =~ \.(yaml|yml)$ ]]; then
+    echo "ERROR: YAML/YML input files are not supported. Provide FASTA or AlphaFold3 JSON input:"
+    echo "       https://github.com/google-deepmind/alphafold3/blob/main/docs/input.md"
+    exit 1
 fi
 
 SAMPLESHEET=""
@@ -347,6 +378,19 @@ elif [ "${MODE}" == "FASTA_INPUT" ]; then
     sanitise_staged_directory
     create_and_normalise_samplesheet --directory "./fasta"
 
+elif [ "${MODE}" == "JSON_INPUT" ]; then
+    mkdir -p fasta
+    cp "${user_input}" ./fasta/
+    dos2unix ./fasta/*
+    sanitise_staged_directory
+    if [ ! -e "./fasta/$(basename "${user_input}")" ]; then
+        echo "ERROR: The AlphaFold3 JSON input was rejected during validation (see WARNING.txt)."
+        exit 1
+    fi
+    create_json_samplesheet "$(pwd)/samplesheet.csv" ./fasta/*
+    SAMPLESHEET="$(pwd)/samplesheet.csv"
+    sanitise_input samplesheet-ids "${SAMPLESHEET}" "$(pwd)/WARNING.txt" || true
+
 elif [ "${MODE}" == "DIRECTORY" ]; then
     mkdir -p fasta
     working_dir=$(pwd)
@@ -355,10 +399,7 @@ elif [ "${MODE}" == "DIRECTORY" ]; then
     do
         [ -f "${filename}" ] || continue
         case "${filename,,}" in
-            *.fa|*.fasta)
-                ;;
-            *.yaml|*.yml)
-                [ "${af_method}" == "boltz2" ] || continue
+            *.fa|*.fasta|*.json)
                 ;;
             *)
                 continue
@@ -385,7 +426,21 @@ elif [ "${MODE}" == "DIRECTORY" ]; then
     fi
     dos2unix "${staged_inputs[@]}"
     sanitise_staged_directory
-    create_and_normalise_samplesheet --directory "./fasta"
+    json_inputs=(./fasta/*.json)
+    if [ ${#json_inputs[@]} -gt 0 ] && [ "${json_inputs[0]}" != "./fasta/*.json" ] && [ ${#json_inputs[@]} -eq ${#staged_inputs[@]} ]; then
+        # Directory contains only AlphaFold3 JSON files.
+        create_json_samplesheet "$(pwd)/samplesheet.csv" "${json_inputs[@]}"
+        SAMPLESHEET="$(pwd)/samplesheet.csv"
+        sanitise_input samplesheet-ids "${SAMPLESHEET}" "$(pwd)/WARNING.txt" || true
+    elif [ "${json_inputs[0]}" != "./fasta/*.json" ]; then
+        # Mixed directory: create-samplesheet covers the FASTA files (it
+        # ignores JSON files); append one row per AlphaFold3 JSON job.
+        create_and_normalise_samplesheet --directory "./fasta"
+        append_json_samplesheet_rows "${SAMPLESHEET}" "${json_inputs[@]}"
+        sanitise_input samplesheet-ids "${SAMPLESHEET}" "$(pwd)/WARNING.txt" || true
+    else
+        create_and_normalise_samplesheet --directory "./fasta"
+    fi
 fi
 
 if [ "${RESUME_RUN}" == "false" ]; then

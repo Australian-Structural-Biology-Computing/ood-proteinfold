@@ -100,8 +100,9 @@ attributes:
         label: "Input Options"
         help: |
             • <b>Directory:</b> <code>/srv/scratch/z3141592/my_experiment/</code>
-            <br>• <b>Single file:</b> <code>protein.fasta</code>, <code>protein.yaml</code>, or <code>samplesheet.csv</code>
+            <br>• <b>Single file:</b> <code>protein.fasta</code>, <code>protein.json</code> (AlphaFold3 format), or <code>samplesheet.csv</code>
             <br>• <b>Sequence:</b> <code>NLYIQWLKDGGPSSGRPPPS</code> or <code>NLYIQWLKDGGPSSGRPPPS:MKTVRQERLKSDHELFRTHT</code>
+            <br>• <b>Rich entities</b> (RNA, DNA, ligands, modifications) are described in AlphaFold3-format JSON — see the <a href="https://github.com/google-deepmind/alphafold3/blob/main/docs/input.md">AlphaFold3 input format documentation</a>. One job per file.
             <br>📖 <a href="https://unsw.sharepoint.com/sites/StructuralBiologyFacility-UserDocumentation/SitePages/ProteinFold-User-Guide.aspx?ga=1#preparing-your-inputs">User Guide</a> for advanced options.
     run_name:
         widget: "text_field"
@@ -117,7 +118,8 @@ attributes:
         label: "Method"
         help: |
             Prediction backend. The AlphaFold3-style backends accept rich entities
-            (RNA, DNA, ligands) via their JSON/YAML inputs.
+            (RNA, DNA, ligands) via AlphaFold3-format JSON inputs
+            (<a href="https://github.com/google-deepmind/alphafold3/blob/main/docs/input.md">input format</a>).
         options:
             - ["AlphaFold2", "alphafold2", {data-hide-af3_weights: true, data-hide-af3_warning: true}]
             - ["AlphaFold3", "alphafold3"]
