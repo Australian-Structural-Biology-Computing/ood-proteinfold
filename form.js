@@ -8,27 +8,33 @@
   const HEADERLESS_SEQUENCE_ID_LENGTH = 6;
   const AMINO_ACID_SEQUENCE_PATTERN = /^[ACDEFGHIKLMNPQRSTVWYX]+$/;
   const ENTITY_TYPES = new Set(["protein", "ccd", "smiles", "dna", "rna"]);
-  const NON_PROTEIN_METHODS = new Set(["alphafold3", "boltz"]);
+  // AF3-style backends accept rich entities (RNA, DNA, ligands) via their
+  // JSON/YAML inputs; AlphaFold2 and ESMFold2 are protein-only.
+  const NON_PROTEIN_METHODS = new Set([
+    "alphafold3",
+    "boltz2",
+    "chai1",
+    "protenix2",
+    "openfold3",
+    "openbind0",
+    "intellifold2",
+    "opendde",
+    "rosettafold3"
+  ]);
+  // Approximate residue limits where they are known; backends without an
+  // entry simply show no length panel.
   const METHOD_TOKEN_LIMITS = {
-    boltz: {
-      title: "Boltz",
-      limit: 5000
+    alphafold2: {
+      title: "AlphaFold2",
+      limit: 4000
     },
     alphafold3: {
       title: "AlphaFold3",
       limit: 5000,
     },
-    alphafold2: {
-      title: "AlphaFold2",
-      limit: 4000
-    },
-    colabfold: {
-      title: "ColabFold",
-      limit: 4000
-    },
-    esmfold: {
-      title: "ESMFold",
-      limit: 600
+    boltz2: {
+      title: "Boltz2",
+      limit: 5000
     }
   };
 
@@ -268,11 +274,7 @@
       });
 
       const methodControl = getFieldControl("af_method", "select");
-      const showAdvancedColabfoldOptions =
-        methodControl &&
-        methodControl.value === "colabfold" &&
-        advancedCheckbox &&
-        advancedCheckbox.checked;
+      const showAdvancedColabfoldOptions = advancedCheckbox && advancedCheckbox.checked;
 
       COLABFOLD_ADVANCED_HIDE_TARGETS.forEach((target) => {
         const previous = fieldHiddenState.get(target) || false;
@@ -370,9 +372,6 @@
     const advCheckbox = getFieldCheckbox('colabfold_advanced_options');
     if (!advCheckbox) return;
 
-    const methodControl = getFieldControl('af_method', 'select');
-    if (!methodControl) return;
-
     const saveCheckbox = getFieldCheckbox('save_intermediates');
     if (!saveCheckbox) return;
 
@@ -390,18 +389,15 @@
     };
 
     const evaluate = () => {
-      const isColabfold = methodControl.value === 'colabfold';
-      if (advCheckbox.checked && isColabfold) applyLock(); else releaseLock();
+      // Conformational sampling publishes intermediate structures, so the
+      // save-intermediates option is locked on whenever sampling is enabled,
+      // for every method.
+      if (advCheckbox.checked) applyLock(); else releaseLock();
     };
 
     if (advCheckbox.dataset.oodEnforceBound !== '1') {
       advCheckbox.addEventListener('change', evaluate);
       advCheckbox.dataset.oodEnforceBound = '1';
-    }
-
-    if (methodControl.dataset.oodEnforceBound !== '1') {
-      methodControl.addEventListener('change', evaluate);
-      methodControl.dataset.oodEnforceBound = '1';
     }
 
     // run once to sync state
@@ -939,11 +935,11 @@
           return;
         }
         if (file.kind === "yaml") {
-          if (methodControl?.value === "boltz") {
+          if (methodControl?.value === "boltz2") {
             runnableInputs += 1;
             if (file.changes?.length) add(`${file.label}: ${file.changes.join(", ")}.`);
           } else {
-            add(`${file.label}: YAML input is only supported by Boltz.`, "error");
+            add(`${file.label}: YAML input is only supported by Boltz2.`, "error");
           }
           return;
         }
@@ -1052,7 +1048,7 @@
         .map((file) => ({
           ...file,
           collectionInput: true,
-          ignoredForMethod: file.kind === "yaml" && methodControl?.value !== "boltz"
+          ignoredForMethod: file.kind === "yaml" && methodControl?.value !== "boltz2"
         }));
     const mapWithConcurrency = async (items, callback, limit = 6) => {
       const results = Array(items.length);
@@ -1118,7 +1114,7 @@
         const files = await loadInputFiles(path, controller.signal);
         if (request !== requestNumber) return;
         if (!files.length) {
-          const expected = methodControl?.value === "boltz"
+          const expected = methodControl?.value === "boltz2"
             ? "FASTA or YAML input files"
             : "FASTA files (.fa or .fasta)";
           lastCheckedFiles = null;

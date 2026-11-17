@@ -29,16 +29,15 @@ class TemplateContext
       resume_id: "20260904_120000_ci",
       run_name: "ci_run",
       samplesheet: "/tmp/samplesheet.csv",
-      af_method: "colabfold",
-      af3_weights: "",
+      af_method: "alphafold2",
+      msa_tool: "colabfold_search",
+      colabfold2_params_path: "",
       full_dbs: "reduced",
       colabfold_num_recycles: 3,
       colabfold_advanced_options: "",
       colabfold_max_msa: "512:1024",
       colabfold_num_seeds: 1,
       colabfold_use_dropout: "false",
-      esmfold_num_recycles: 4,
-      boltz_use_potentials: "false",
       random_seed: "",
       save_intermediates: "false",
       generate_plddt_previews: "true"
@@ -47,7 +46,7 @@ class TemplateContext
 
   def get_binding
     run_name = "ci_run"
-    af_method = "colabfold"
+    af_method = "alphafold2"
     email = "ci@example.com"
     email_on_terminated = false
     context = @context

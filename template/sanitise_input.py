@@ -19,7 +19,21 @@ RNA_ALPHABET = frozenset("ACUGN")
 SMILES_PATTERN = re.compile(r"[A-Za-z0-9@+\-\[\]\(\)=#\$%:./\\*]+")
 SMILES_DANGLING_TOKENS = frozenset("-/\\=#$%:.")
 ENTITY_TYPES = frozenset(("protein", "ccd", "smiles", "dna", "rna"))
-NON_PROTEIN_METHODS = frozenset(("alphafold3", "boltz"))
+# AF3-style ColabFold2 backends accept rich entities (RNA, DNA, ligands) via
+# their JSON/YAML inputs; AlphaFold2 and ESMFold2 are protein-only.
+NON_PROTEIN_METHODS = frozenset(
+    (
+        "alphafold3",
+        "boltz2",
+        "chai1",
+        "protenix2",
+        "openfold3",
+        "openbind0",
+        "intellifold2",
+        "opendde",
+        "rosettafold3",
+    )
+)
 POLYMER_ENTITY_TYPES = frozenset(("protein", "dna", "rna"))
 BOLTZ_ENTITY_TYPES = POLYMER_ENTITY_TYPES | {"ligand"}
 
@@ -347,7 +361,7 @@ def sanitise_fasta(source_path, destination_path, af_method=None):
             if af_method and not entity_type_is_supported(entity_type, af_method):
                 raise IncompatibleEntityError(
                     f"FASTA record is {entity_type} input, which is only supported by "
-                    "AlphaFold3 or Boltz"
+                    "the AlphaFold3-style backends"
                 )
             digest.update(hashlib.sha256(sequence.encode("utf-8")).digest())
 
@@ -544,7 +558,7 @@ def sanitise_samplesheet(samplesheet_path, output_path, input_dir, warning_path,
                     f"Samplesheet row {index} has unsupported input type: {input_path}. "
                     "Expected a .fa or .fasta file, or a .yaml/.yml file for Boltz."
                 )
-            if kind == "yaml" and af_method != "boltz":
+            if kind == "yaml" and af_method != "boltz2":
                 warnings.append(
                     f"Skipped samplesheet row {index}: YAML input is only supported by Boltz"
                 )
@@ -626,7 +640,7 @@ def sanitise_directory(directory, warning_path, af_method=None):
         if entry.is_file() and entry.name.lower().endswith(FASTA_SUFFIXES)
     )
     warnings = []
-    if af_method == "boltz":
+    if af_method == "boltz2":
         for yaml_file in yaml_files:
             changes = sanitise_boltz_yaml_in_place(yaml_file)
             if changes:

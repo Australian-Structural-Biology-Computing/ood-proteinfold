@@ -88,7 +88,7 @@ class SanitiseFastaTests(unittest.TestCase):
             source.write_text(">bad_smiles|smiles\nCCO/\n")
 
             with self.assertRaisesRegex(ValueError, "dangling bond or component syntax"):
-                SANITISE_INPUT.sanitise_fasta(source, destination, "boltz")
+                SANITISE_INPUT.sanitise_fasta(source, destination, "boltz2")
 
     def test_strips_terminal_stop_before_hashing(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -126,7 +126,7 @@ class SanitiseFastaTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)
-            for method in ("alphafold3", "boltz"):
+            for method in ("alphafold3", "boltz2"):
                 for entity_type, (contents, sequence) in inputs.items():
                     with self.subTest(method=method, entity_type=entity_type):
                         source = directory / f"{method}-{entity_type}.fasta"
@@ -188,7 +188,7 @@ class SanitiseDirectoryTests(unittest.TestCase):
             )
             input_path.write_text(contents)
 
-            SANITISE_INPUT.sanitise_directory(directory, warning_path, "boltz")
+            SANITISE_INPUT.sanitise_directory(directory, warning_path, "boltz2")
 
             self.assertFalse(warning_path.exists())
             self.assertEqual(input_path.read_text(), contents)
@@ -360,7 +360,7 @@ class SanitiseSamplesheetTests(unittest.TestCase):
             output_path = directory / "sanitised.csv"
 
             SANITISE_INPUT.sanitise_samplesheet(
-                samplesheet, output_path, directory / "inputs", directory / "WARNING.txt", "boltz"
+                samplesheet, output_path, directory / "inputs", directory / "WARNING.txt", "boltz2"
             )
 
             with output_path.open(newline="") as handle:
